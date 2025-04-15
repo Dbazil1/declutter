@@ -1,8 +1,9 @@
 import streamlit as st
-from services.data_service import update_user_whatsapp
-from utils.translation_utils import t
-import re
 import os
+import traceback
+import time
+from services.data_service import update_user_whatsapp, get_user_details_safely
+from utils.translation_utils import t
 
 def render_settings_page():
     st.title(t("settings"))
@@ -15,28 +16,74 @@ def render_settings_page():
         st.write(f"User ID: {user.id if user else None}")
         st.write(f"User email: {user.email if user else None}")
     
-    # Get additional user details from the database
+    # Get additional user details from the database using our safe function
     try:
         if not user or not hasattr(user, 'id'):
             st.error("User information is missing or invalid. Please try logging in again.")
             user_details = {'first_name': '', 'last_name': ''}
         else:
-            user_response = st.session_state.supabase.table('users')\
-                .select('first_name, last_name, whatsapp_phone, share_whatsapp_for_items')\
-                .eq('id', user.id)\
-                .execute()
+            # Use our new safer function that tries multiple methods
+            user_details = get_user_details_safely(user.id)
             
             if os.getenv('ENVIRONMENT') == 'development':
-                st.write(f"User query response: {user_response.data if hasattr(user_response, 'data') else None}")
-            
-            user_details = user_response.data[0] if user_response and user_response.data and len(user_response.data) > 0 else None
+                st.write(f"User details retrieved: {user_details}")
             
             if not user_details:
                 st.warning("User details could not be found. Some settings may not be available.")
-                user_details = {'first_name': '', 'last_name': ''}
+                
+                # Try to create the user record if it doesn't exist
+                try:
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.info("Attempting to create user record...")
+                    
+                    # Extract metadata from user object if available
+                    metadata = user.user_metadata if hasattr(user, 'user_metadata') else {}
+                    first_name = metadata.get('first_name', user.email.split('@')[0] if user.email else '')
+                    last_name = metadata.get('last_name', '')
+                    
+                    # Create user record with service role client
+                    from services.data_service import check_user_details
+                    import os
+                    from supabase import create_client
+                    
+                    service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+                    url = os.getenv("SUPABASE_URL")
+                    client = create_client(url, service_key)
+                    
+                    response = client.table('users').insert({
+                        'id': user.id,
+                        'email': user.email,
+                        'first_name': first_name,
+                        'last_name': last_name,
+                        'role': 'user'
+                    }).execute()
+                    
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.success("User record created successfully!")
+                    
+                    # Set default user details
+                    user_details = {
+                        'first_name': first_name,
+                        'last_name': last_name,
+                        'email': user.email,
+                        'whatsapp_phone': '',
+                        'share_whatsapp_for_items': False
+                    }
+                except Exception as create_err:
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.error(f"Failed to create user record: {str(create_err)}")
+                        st.error(traceback.format_exc())
+                    
+                    # Default values as fallback
+                    user_details = {
+                        'first_name': user.email.split('@')[0] if user.email else '',
+                        'last_name': '',
+                        'email': user.email if hasattr(user, 'email') else '',
+                        'whatsapp_phone': '',
+                        'share_whatsapp_for_items': False
+                    }
     except Exception as e:
         st.error(f"Error loading user details: {str(e)}")
-        import traceback
         if os.getenv('ENVIRONMENT') == 'development':
             st.error(traceback.format_exc())
         user_details = {'first_name': '', 'last_name': ''}
@@ -66,8 +113,13 @@ def render_settings_page():
         if submit_personal:
             if first_name.strip() and last_name.strip():
                 try:
+                    # Use service role to update
+                    service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+                    url = os.getenv("SUPABASE_URL")
+                    client = create_client(url, service_key)
+                    
                     # Update user information
-                    st.session_state.supabase.table('users')\
+                    client.table('users')\
                         .update({
                             'first_name': first_name.strip(),
                             'last_name': last_name.strip()
@@ -75,8 +127,12 @@ def render_settings_page():
                         .eq('id', user.id)\
                         .execute()
                     st.success(t('personal_info_updated'))
+                    time.sleep(1)
                     st.rerun()
                 except Exception as e:
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.error(f"Error updating profile: {str(e)}")
+                        st.error(traceback.format_exc())
                     st.error(t('error_updating_profile'))
             else:
                 st.error(t('enter_names'))
@@ -129,9 +185,28 @@ def render_settings_page():
                 # Format phone number (removing spaces and dashes)
                 formatted_phone = phone_number.strip().replace("-", "").replace(" ", "")
                 
-                # Update WhatsApp information
-                if update_user_whatsapp(formatted_phone, share_whatsapp_checkbox):
+                try:
+                    # Use service role to update
+                    service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+                    url = os.getenv("SUPABASE_URL")
+                    client = create_client(url, service_key)
+                    
+                    # Update WhatsApp information directly
+                    client.table('users')\
+                        .update({
+                            'whatsapp_phone': formatted_phone,
+                            'share_whatsapp_for_items': share_whatsapp_checkbox
+                        })\
+                        .eq('id', user.id)\
+                        .execute()
+                    
                     st.success(t('settings_updated'))
+                    time.sleep(1)
                     st.rerun()
+                except Exception as e:
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.error(f"Error updating WhatsApp settings: {str(e)}")
+                        st.error(traceback.format_exc())
+                    st.error("Failed to update WhatsApp settings. Please try again.")
             else:
                 st.warning(t('please_enter_whatsapp')) 

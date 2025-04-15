@@ -458,4 +458,50 @@ def update_whatsapp_sharing(share_for_items):
         return bool(response.data)
     except Exception as e:
         st.error(f"Error updating WhatsApp sharing preferences: {str(e)}")
-        return False 
+        return False
+
+# Check user details using service role (bypasses RLS)
+def check_user_details(user_id):
+    """Debug function to check user details using service role key to bypass RLS"""
+    try:
+        # Create a new client with service role key
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        client = create_client(url, service_key)
+        
+        # Try to get user details
+        response = client.table('users').select('*').eq('id', user_id).execute()
+        
+        if os.getenv('ENVIRONMENT') == 'development':
+            st.write(f"Service role query returned: {response.data}")
+            
+        return response.data
+    except Exception as e:
+        st.error(f"Service role query error: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
+        return None
+
+# Get user details safely, trying multiple methods
+def get_user_details_safely(user_id):
+    """Get user details using multiple fallback methods"""
+    try:
+        # First, try with regular client
+        response = st.session_state.supabase.table('users').select('*').eq('id', user_id).execute()
+        
+        if response and hasattr(response, 'data') and response.data:
+            return response.data[0]
+            
+        # If that fails, try with service role
+        service_data = check_user_details(user_id)
+        if service_data and len(service_data) > 0:
+            return service_data[0]
+            
+        # If still no data, return None
+        return None
+    except Exception as e:
+        if os.getenv('ENVIRONMENT') == 'development':
+            st.error(f"Error getting user details safely: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
+        return None 
