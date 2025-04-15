@@ -521,7 +521,11 @@ def render_login_ui():
                 if st.button("🔧 Debug Connection", key="debug_connection"):
                     from services.data_service import debug_env
                     debug_env()
-                    st.write("Supabase client initialized with:", st.session_state.supabase.auth.url)
+                    # Check if supabase client is initialized properly before accessing auth.url
+                    if 'supabase' in st.session_state and st.session_state.supabase and hasattr(st.session_state.supabase, 'auth'):
+                        st.write("Supabase client initialized with:", st.session_state.supabase.auth.url)
+                    else:
+                        st.error("Supabase client not properly initialized.")
         
         with tab2:  # Signup tab
             # Show success message above the form if exists
