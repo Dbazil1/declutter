@@ -1,5 +1,6 @@
 # .gitignore
 .env
+.env.toml
 freezer
 __pycache__/
 *.py[cod]

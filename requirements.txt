@@ -17,4 +17,5 @@ aiohttp==3.9.3
 asyncio==3.4.3
 ujson
 country-list
-streamlit-extras 
+streamlit-extras
+tomli==2.0.1 

@@ -388,7 +388,7 @@ def apply_custom_css():
 def render_sidebar_nav(current_page, first_name, on_logout):
     from utils.translation_utils import t
     
-    st.sidebar.image("declutter-logo.png", use_column_width=True)
+    st.sidebar.image("declutter-logo.png", use_container_width=True)
     
     # Keep All Items as full button
     if st.sidebar.button("📋 " + "View All Your Items", key="nav_all", use_container_width=True):
@@ -457,7 +457,7 @@ def render_sidebar_nav(current_page, first_name, on_logout):
             st.rerun()
 
     # Add bazil-dot-studio logo at the very bottom
-    st.sidebar.image("bazil-dot-studio.png", use_column_width=True)
+    st.sidebar.image("bazil-dot-studio.png", use_container_width=True)
 
     # Add language selector at the very bottom
     st.sidebar.markdown("---")  # Add a divider

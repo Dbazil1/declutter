@@ -90,7 +90,7 @@ def render_public_page(link_code):
                 
                 # Display the image
                 if item.get('image_url'):
-                    st.image(item['image_url'], use_column_width=True)
+                    st.image(item['image_url'], use_container_width=True)
                 else:
                     st.markdown("*No image available / Imagen no disponible*")
                 
