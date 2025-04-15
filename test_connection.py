@@ -1,9 +1,11 @@
 import os
 import asyncio
 import uuid
+import json
 from dotenv import load_dotenv
 from postgrest import AsyncPostgrestClient
 from supabase import create_client
+import traceback
 
 async def test_connection():
     # Load environment variables
@@ -104,6 +106,17 @@ async def test_connection():
                 print("No users found for testing")
         else:
             print("\nSkipping write tests - SUPABASE_SERVICE_ROLE_KEY not found")
+            
+        # Test output detailed JSON response of a simple query
+        if is_development_mode():
+            print("\nTesting detailed response format:")
+            try:
+                response = admin_client.table('items').select('*').limit(1).execute()
+                print(f"Response type: {type(response)}")
+                print(f"Response attributes: {dir(response)}")
+                print(f"Response data: {json.dumps(response.data, indent=2)}")
+            except Exception as e:
+                print(f"Error getting detailed response: {str(e)}")
         
         return True
             
@@ -111,7 +124,12 @@ async def test_connection():
         print(f"❌ Connection failed: {str(e)}")
         if hasattr(e, 'json'):
             print(f"Error details: {e.json()}")
+        print(traceback.format_exc())
         return False
+
+def is_development_mode():
+    """Check if we're in development mode"""
+    return os.getenv('ENVIRONMENT', '').lower() == 'development'
 
 if __name__ == "__main__":
     asyncio.run(test_connection()) 

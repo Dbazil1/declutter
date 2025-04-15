@@ -25,6 +25,41 @@ from views.public_page import render_public_page
 # Set development mode flag
 is_development = os.getenv('ENVIRONMENT', '').lower() == 'development'
 
+# Debug function to check auth status
+def debug_auth_status():
+    """Display debug information about the current authentication status"""
+    if not is_development:
+        return
+        
+    st.sidebar.markdown("---")
+    st.sidebar.write("### Debug Information")
+    
+    # Check if user exists in session
+    if 'user' in st.session_state and st.session_state.user:
+        st.sidebar.write("✅ User is authenticated")
+        st.sidebar.write(f"User ID: {st.session_state.user.id}")
+        if hasattr(st.session_state.user, 'email'):
+            st.sidebar.write(f"Email: {st.session_state.user.email}")
+            
+        # Check if user has a valid token
+        if 'supabase' in st.session_state:
+            try:
+                # Test a simple query to see if auth is valid
+                test_result = st.session_state.supabase.table('users').select('id').limit(1).execute()
+                if test_result.data:
+                    st.sidebar.write("✅ Supabase token is valid")
+                else:
+                    st.sidebar.write("❌ Supabase token appears invalid (query returned no data)")
+            except Exception as e:
+                st.sidebar.write("❌ Supabase token is invalid or expired")
+                st.sidebar.write(f"Error: {str(e)}")
+    else:
+        st.sidebar.write("❌ User is not authenticated")
+    
+    # Show session state keys
+    st.sidebar.write("Session state keys:")
+    st.sidebar.write(list(st.session_state.keys()))
+
 # Configure the page
 st.set_page_config(
     page_title="Declutter",
@@ -96,6 +131,10 @@ else:
                 import traceback
                 st.error(traceback.format_exc())
             first_name = 'User'
+        
+        # Display debug information if in development mode
+        if is_development:
+            debug_auth_status()
         
         # Render sidebar navigation
         render_sidebar_nav(

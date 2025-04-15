@@ -133,13 +133,29 @@ def add_item(item_data, image=None):
             st.error("User not authenticated")
             return None
             
-        # Ensure user_id is included in the item data
+        # Ensure user_id is included in the item data and properly formatted
         if 'user_id' not in item_data:
-            item_data['user_id'] = st.session_state.user.id
+            # Make sure the user ID is a string - sometimes UUID objects cause issues
+            user_id = st.session_state.user.id
+            if hasattr(user_id, 'hex'):  # If it's a UUID object
+                user_id = str(user_id)
+            item_data['user_id'] = user_id
 
         # Add debug output in development mode
         if is_development:
             st.write(f"Adding new item: {item_data}")
+            st.write(f"User ID type: {type(item_data['user_id'])}")
+            
+            # Get and print the SQL query that would be executed
+            try:
+                query_obj = st.session_state.supabase.table('items').insert(item_data)
+                
+                if hasattr(query_obj, '_Builder__prepared_query'):
+                    st.write(f"Debug SQL Query: {query_obj._Builder__prepared_query}")
+                elif hasattr(query_obj, 'query'):
+                    st.write(f"Debug SQL Query: {query_obj.query}")
+            except Exception as query_debug_err:
+                st.write(f"Error getting query debug info: {str(query_debug_err)}")
             
         # First create the item
         try:
@@ -149,6 +165,13 @@ def add_item(item_data, image=None):
             
             if is_development:
                 st.write(f"Insert response: {response}")
+                st.write(f"Response type: {type(response)}")
+                st.write(f"Response attributes: {dir(response)}")
+                
+                if hasattr(response, 'data'):
+                    st.write(f"Response data: {response.data}")
+                if hasattr(response, 'error'):
+                    st.write(f"Response error: {response.error}")
                 
             if not response.data:
                 st.error("Failed to create item. Please check your permissions.")
@@ -255,6 +278,20 @@ def update_item(item_id, item_data, image=None):
             st.write(f"Updating item: {item_id}")
             st.write(f"Current data: {current_item}")
             st.write(f"New data: {item_data}")
+            st.write(f"User ID: {st.session_state.user.id}")
+            
+            # Get and print the SQL query that would be executed
+            try:
+                query_obj = st.session_state.supabase.table('items')\
+                    .update(item_data)\
+                    .eq('id', item_id)
+                
+                if hasattr(query_obj, '_Builder__prepared_query'):
+                    st.write(f"Debug SQL Query: {query_obj._Builder__prepared_query}")
+                elif hasattr(query_obj, 'query'):
+                    st.write(f"Debug SQL Query: {query_obj.query}")
+            except Exception as query_debug_err:
+                st.write(f"Error getting query debug info: {str(query_debug_err)}")
         
         # Update the item
         try:
@@ -265,6 +302,13 @@ def update_item(item_id, item_data, image=None):
                 
             if is_development:
                 st.write(f"Update response: {response}")
+                st.write(f"Response type: {type(response)}")
+                st.write(f"Response attributes: {dir(response)}")
+                
+                if hasattr(response, 'data'):
+                    st.write(f"Response data: {response.data}")
+                if hasattr(response, 'error'):
+                    st.write(f"Response error: {response.error}")
             
             if not response.data:
                 st.error("Error: Item update query returned no data")
