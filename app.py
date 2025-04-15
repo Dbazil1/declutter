@@ -232,20 +232,17 @@ try:
     
     if auth_state == "needs_login":
         st.session_state.current_page = 'home'
+        # Since we're changing page to 'home', we need to render it
+        render_home_page()
     elif auth_state == "authenticated":
-        # Only proceed if we have a valid user
+        # Only proceed if we have a valid user and the page wasn't already rendered above
         if st.session_state.user and hasattr(st.session_state.user, 'id'):
             if is_development:
                 st.write(f"Debug: User authenticated: {st.session_state.user.email}")
             
-            # Render the appropriate page based on session state
+            # Only render home page here if it wasn't already rendered above
+            # The other pages (settings, public_links) are already handled in the previous section
             if st.session_state.current_page == 'home':
-                render_home_page()
-            elif st.session_state.current_page == 'settings':
-                render_settings_page()
-            elif st.session_state.current_page == 'public_links':
-                render_public_links_page()
-            else:
                 render_home_page()
         else:
             if is_development:
