@@ -31,20 +31,27 @@ def init_supabase():
         url = os.getenv("SUPABASE_URL")
         key = os.getenv("SUPABASE_KEY")
         
-        # Log the configuration (without showing full keys)
-        if url:
-            masked_url = url[:15] + "..." if len(url) > 15 else url
-            st.write(f"Debug: Supabase URL configured: {masked_url}")
+        # Only show debug info in development mode
+        if is_development:
+            # Log the configuration (without showing full keys)
+            if url:
+                masked_url = url[:15] + "..." if len(url) > 15 else url
+                st.write(f"Debug: Supabase URL configured: {masked_url}")
+            else:
+                st.error("Error: SUPABASE_URL environment variable is not set")
+                return None
+                
+            if key:
+                masked_key = key[:5] + "..." + key[-5:] if len(key) > 10 else "***"
+                st.write(f"Debug: Supabase API key available: {masked_key}")
+            else:
+                st.error("Error: SUPABASE_KEY environment variable is not set")
+                return None
         else:
-            st.error("Error: SUPABASE_URL environment variable is not set")
-            return None
-            
-        if key:
-            masked_key = key[:5] + "..." + key[-5:] if len(key) > 10 else "***"
-            st.write(f"Debug: Supabase API key available: {masked_key}")
-        else:
-            st.error("Error: SUPABASE_KEY environment variable is not set")
-            return None
+            # In production, just check if variables exist
+            if not url or not key:
+                st.error("Error: Required environment variables are not set")
+                return None
             
         try:
             client = create_client(url, key)
