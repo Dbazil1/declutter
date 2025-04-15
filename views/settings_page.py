@@ -1,7 +1,8 @@
-import streamlit as st
 import os
+import streamlit as st
 import traceback
 import time
+from supabase import create_client
 from services.data_service import update_user_whatsapp, get_user_details_safely
 from utils.translation_utils import t
 
@@ -44,7 +45,6 @@ def render_settings_page():
                     # Create user record with service role client
                     from services.data_service import check_user_details
                     import os
-                    from supabase import create_client
                     
                     service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
                     url = os.getenv("SUPABASE_URL")
