@@ -84,7 +84,7 @@ translations = {
         'link_activated': "Link activated",
         'link_deleted': "Link deleted",
         'created': "Created",
-        'available_items': "Available Items",
+        'available_items': "Items Available for Sale",
         'no_available_items_public': "There are currently no available items.",
         'invalid_link': "This link is invalid or has been deactivated.",
         
@@ -223,5 +223,11 @@ translations = {
         
         'account_already_exists': "¡Parece que ya tienes una cuenta! Intenta iniciar sesión en su lugar.",
         'signup_failed': "Lo sentimos, no pudimos crear tu cuenta. Por favor, inténtalo más tarde.",
+        'link_activated': "Enlace activado",
+        'link_deleted': "Enlace eliminado",
+        'created': "Creado",
+        'available_items': "Artículos de Venta",
+        'no_available_items_public': "No hay artículos disponibles actualmente.",
+        'invalid_link': "Este enlace es inválido o ha sido desactivado.",
     }
 } 

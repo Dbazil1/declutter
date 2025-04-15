@@ -1,5 +1,6 @@
 import streamlit as st
 import traceback
+import json
 from utils.translation_utils import t
 from services.data_service import update_user_whatsapp
 
@@ -19,6 +20,9 @@ def login(email: str, password: str):
         
         # Clear all cached data when logging in
         st.cache_data.clear()
+        
+        # Store auth info in browser cookies
+        save_auth_to_cookie(auth.session)
         
         # If the user has pending WhatsApp info to update, do it now
         if 'whatsapp_info' in st.session_state:
@@ -131,7 +135,112 @@ def logout():
     try:
         st.session_state.supabase.auth.sign_out()
         st.session_state.user = None
+        
+        # Clear auth cookies
+        clear_auth_cookies()
+        
         st.success("Logged out successfully!")
     except Exception as e:
         st.error(f"Error during logout: {str(e)}")
-        st.error(traceback.format_exc()) 
+        st.error(traceback.format_exc())
+
+# Function to save authentication info to cookies
+def save_auth_to_cookie(session):
+    try:
+        # Store the access token and refresh token in session state for persistence
+        st.session_state['auth_token'] = session.access_token
+        st.session_state['refresh_token'] = session.refresh_token
+        
+        # Use JavaScript to store tokens in browser's localStorage
+        js_code = f"""
+        <script>
+            localStorage.setItem('declutter_auth_token', '{session.access_token}');
+            localStorage.setItem('declutter_refresh_token', '{session.refresh_token}');
+            localStorage.setItem('declutter_expires_at', '{session.expires_at}');
+        </script>
+        """
+        st.markdown(js_code, unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Error saving auth to cookie: {str(e)}")
+
+# Function to clear authentication cookies
+def clear_auth_cookies():
+    try:
+        # Clear from session state
+        if 'auth_token' in st.session_state:
+            del st.session_state['auth_token']
+        if 'refresh_token' in st.session_state:
+            del st.session_state['refresh_token']
+        
+        # Use JavaScript to clear localStorage
+        js_code = """
+        <script>
+            localStorage.removeItem('declutter_auth_token');
+            localStorage.removeItem('declutter_refresh_token');
+            localStorage.removeItem('declutter_expires_at');
+        </script>
+        """
+        st.markdown(js_code, unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Error clearing auth cookies: {str(e)}")
+
+# Function to check for existing auth in cookies and restore session
+def restore_auth_from_cookies():
+    try:
+        # Create JavaScript to check localStorage and set values in sessionStorage that we can access
+        js_code = """
+        <script>
+            // Check if tokens exist in localStorage
+            const authToken = localStorage.getItem('declutter_auth_token');
+            const refreshToken = localStorage.getItem('declutter_refresh_token');
+            
+            if (authToken && refreshToken) {
+                // Store in sessionStorage so our Python code can access it
+                sessionStorage.setItem('declutter_auth_token', authToken);
+                sessionStorage.setItem('declutter_refresh_token', refreshToken);
+                
+                // Add a hidden element with the token that we can query
+                const tokenEl = document.createElement('div');
+                tokenEl.id = 'auth-token-element';
+                tokenEl.style.display = 'none';
+                tokenEl.innerText = authToken;
+                document.body.appendChild(tokenEl);
+                
+                // Force a reload to ensure our Python code can access the sessionStorage
+                if (!document.getElementById('auth-token-set')) {
+                    const marker = document.createElement('div');
+                    marker.id = 'auth-token-set';
+                    marker.style.display = 'none';
+                    document.body.appendChild(marker);
+                    setTimeout(() => { window.location.reload(); }, 100);
+                }
+            }
+        </script>
+        """
+        st.markdown(js_code, unsafe_allow_html=True)
+        
+        # Check session state for tokens (these would have been saved in previous runs)
+        auth_token = st.session_state.get('auth_token')
+        refresh_token = st.session_state.get('refresh_token')
+        
+        if auth_token and refresh_token:
+            # Try to restore the session using the tokens
+            try:
+                # Set token manually
+                st.session_state.supabase.auth.set_session(auth_token, refresh_token)
+                
+                # Get the user from the session
+                user_response = st.session_state.supabase.auth.get_user()
+                if user_response and user_response.user:
+                    st.session_state.user = user_response.user
+                    return True
+            except Exception as session_error:
+                # Token may be expired or invalid, clear cookies
+                clear_auth_cookies()
+                st.session_state.user = None
+        
+        return False
+    except Exception as e:
+        # If there's any error, ensure we're in a logged-out state
+        st.session_state.user = None
+        return False 

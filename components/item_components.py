@@ -216,7 +216,12 @@ def render_add_item_form(rerun_callback=None):
                     "sale_status": selected_status,
                     "is_sold": selected_status == 'paid_picked_up'
                 }
-                if selected_status != 'available' and sold_to:
+                
+                # Ensure at least one price is set
+                if price_usd <= 0 and price_local <= 0:
+                    st.error("Please enter at least one price (USD or Local)")
+                    return
+                elif selected_status != 'available' and sold_to:
                     item_data['sold_to'] = sold_to
                 
                 new_item = add_item(item_data, image)

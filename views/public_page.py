@@ -38,20 +38,39 @@ def render_public_page(link_code):
     
     # Get owner info including name
     owner_info = st.session_state.supabase.table('users')\
-        .select('first_name')\
+        .select('first_name, last_name')\
         .eq('id', public_link['user_id'])\
         .execute()
     
-    owner_name = owner_info.data[0]['first_name'] if owner_info.data else 'User'
+    # Get owner's first and last name
+    if owner_info.data:
+        owner_first_name = owner_info.data[0].get('first_name', '')
+        owner_last_name = owner_info.data[0].get('last_name', '')
+        owner_full_name = f"{owner_first_name} {owner_last_name}"
+    else:
+        owner_full_name = 'User'
     
     # Get owner's WhatsApp info
     owner_whatsapp = get_user_whatsapp_info(public_link['user_id'])
     
-    # Display the page title and header with owner's name
-    st.title(f"{owner_name}'s " + bilingual('available_items'))
+    # Display owner's name as main header
+    st.title(owner_full_name)
     
-    if public_link.get('name'):
-        st.subheader(public_link['name'])
+    # Save current language
+    current_language = st.session_state.language
+    
+    # Get translations in both languages separately for proper grammar
+    st.session_state.language = 'en'
+    english_title = t('available_items')
+    
+    st.session_state.language = 'es'
+    spanish_title = t('available_items')
+    
+    # Restore original language
+    st.session_state.language = current_language
+    
+    # Display bilingual subtitle
+    st.header(f"{english_title} / {spanish_title}")
     
     # Display message if no items available
     if not items:
