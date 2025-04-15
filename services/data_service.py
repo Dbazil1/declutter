@@ -128,6 +128,11 @@ def load_items(force_reload=False):
 # Add new item
 def add_item(item_data, image=None):
     try:
+        # Check if user is authenticated
+        if not st.session_state.get('user'):
+            st.error("User not authenticated")
+            return None
+            
         # First create the item
         response = st.session_state.supabase.table('items')\
             .insert(item_data)\
@@ -187,6 +192,11 @@ def add_item(item_data, image=None):
 # Update item
 def update_item(item_id, item_data, image=None):
     try:
+        # Check if user is authenticated
+        if not st.session_state.get('user'):
+            st.error("User not authenticated")
+            return None
+            
         # Get the current item data to check for changes
         current_item = st.session_state.supabase.table('items')\
             .select('*, item_images(image_url)')\
@@ -286,7 +296,7 @@ def update_item(item_id, item_data, image=None):
     except Exception as e:
         st.error(f"Error updating item: {str(e)}")
         st.error(traceback.format_exc())
-        return None 
+        return None
 
 # Generate a unique code for public links
 def generate_link_code(length=10):
