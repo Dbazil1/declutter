@@ -25,16 +25,40 @@ def debug_env():
 def init_supabase():
     try:
         url = os.getenv("SUPABASE_URL")
-        
-        # For authentication, use the anon key
         key = os.getenv("SUPABASE_KEY")
         
-        if not url or not key:
-            st.error("Missing Supabase credentials. Please check your .env file.")
-            debug_env()
+        # Log the configuration (without showing full keys)
+        if url:
+            masked_url = url[:15] + "..." if len(url) > 15 else url
+            st.write(f"Debug: Supabase URL configured: {masked_url}")
+        else:
+            st.error("Error: SUPABASE_URL environment variable is not set")
             return None
             
-        return create_client(url, key)
+        if key:
+            masked_key = key[:5] + "..." + key[-5:] if len(key) > 10 else "***"
+            st.write(f"Debug: Supabase API key available: {masked_key}")
+        else:
+            st.error("Error: SUPABASE_KEY environment variable is not set")
+            return None
+            
+        try:
+            client = create_client(url, key)
+            # Test the connection
+            if os.getenv('ENVIRONMENT') == 'development':
+                st.write("Attempting to connect to Supabase...")
+                # Simple query to test connection
+                try:
+                    test = client.table('users').select('count', count='exact').execute()
+                    st.write(f"Connection successful! Found {test.count if hasattr(test, 'count') else 'unknown'} users.")
+                except Exception as test_err:
+                    st.warning(f"Connection established but test query failed: {str(test_err)}")
+                    
+            return client
+        except Exception as client_err:
+            st.error(f"Failed to initialize Supabase client: {str(client_err)}")
+            st.error(traceback.format_exc())
+            return None
     except Exception as e:
         st.error(f"Error initializing Supabase client: {str(e)}")
         st.error(traceback.format_exc())

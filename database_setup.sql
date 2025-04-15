@@ -7,6 +7,7 @@ CREATE SCHEMA IF NOT EXISTS auth;
 -- Users Table
 CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY REFERENCES auth.users(id),
+    email TEXT,
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user',
@@ -188,12 +189,36 @@ END $$;
 -- Create function to handle user creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  first_name_val TEXT;
+  last_name_val TEXT;
 BEGIN
-    INSERT INTO public.users (id, first_name, last_name, role)
+    -- Try to get first name and last name from different possible metadata locations
+    first_name_val := COALESCE(
+        NEW.raw_user_meta_data->>'first_name',
+        NEW.raw_user_meta_data->'user_metadata'->>'first_name',
+        NEW.raw_app_meta_data->>'first_name',
+        NEW.email::TEXT
+    );
+    
+    last_name_val := COALESCE(
+        NEW.raw_user_meta_data->>'last_name',
+        NEW.raw_user_meta_data->'user_metadata'->>'last_name',
+        NEW.raw_app_meta_data->>'last_name',
+        ''
+    );
+    
+    -- Split email at @ sign if no first name was found
+    IF first_name_val = NEW.email::TEXT THEN
+        first_name_val := split_part(NEW.email::TEXT, '@', 1);
+    END IF;
+    
+    INSERT INTO public.users (id, email, first_name, last_name, role)
     VALUES (
         NEW.id,
-        COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
-        COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
+        NEW.email,
+        first_name_val,
+        last_name_val,
         'user'
     );
     RETURN NEW;

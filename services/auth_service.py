@@ -3,6 +3,7 @@ import traceback
 import json
 from utils.translation_utils import t
 from services.data_service import update_user_whatsapp
+import os
 
 # Authentication functions
 def login(email: str, password: str):
@@ -12,30 +13,91 @@ def login(email: str, password: str):
             return False
             
         st.write("Attempting to sign in...")
-        auth = st.session_state.supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
-        st.session_state.user = auth.user
-        
-        # Clear all cached data when logging in
-        st.cache_data.clear()
-        
-        # Store auth info in browser cookies
-        save_auth_to_cookie(auth.session)
-        
-        # If the user has pending WhatsApp info to update, do it now
-        if 'whatsapp_info' in st.session_state:
-            whatsapp_info = st.session_state.whatsapp_info
-            update_user_whatsapp(
-                whatsapp_info['phone'], 
-                whatsapp_info['share']
-            )
-            # Remove the temporary data
-            del st.session_state.whatsapp_info
-        
-        st.success("Login successful!")
-        return True
+        try:
+            auth = st.session_state.supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+            
+            # Debug information about the auth response
+            if os.getenv('ENVIRONMENT') == 'development':
+                st.write(f"Auth successful, user ID: {auth.user.id}")
+                st.write(f"User email from auth: {auth.user.email}")
+                st.write(f"User metadata: {auth.user.user_metadata}")
+            
+            st.session_state.user = auth.user
+            
+            # Verify user exists in the users table and create if needed
+            user_record = st.session_state.supabase.table('users').select('*').eq('id', auth.user.id).execute()
+            
+            if not user_record.data:
+                # The user exists in auth.users but not in public.users
+                # This can happen if the trigger failed or if we're migrating users
+                if os.getenv('ENVIRONMENT') == 'development':
+                    st.warning("User not found in public.users table, creating record now...")
+                
+                # Try to extract first/last name from auth metadata
+                metadata = auth.user.user_metadata if hasattr(auth.user, 'user_metadata') else {}
+                first_name = metadata.get('first_name', email.split('@')[0])
+                last_name = metadata.get('last_name', '')
+                
+                # Create the missing user record
+                user_data = {
+                    'id': auth.user.id,
+                    'email': email,  # Add email to ensure it matches auth.users
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'role': 'user'
+                }
+                
+                try:
+                    insert_response = st.session_state.supabase.table('users').insert(user_data).execute()
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.success("User record created in public.users table")
+                        st.write(f"Insert response: {insert_response.data if hasattr(insert_response, 'data') else None}")
+                except Exception as create_error:
+                    # Log error but don't fail login
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.error(f"Failed to create user record: {str(create_error)}")
+                        st.error(traceback.format_exc())
+            else:
+                if os.getenv('ENVIRONMENT') == 'development':
+                    st.success(f"Found existing user record: {user_record.data}")
+            
+            # Clear all cached data when logging in
+            st.cache_data.clear()
+            
+            # Store auth info in browser cookies
+            save_auth_to_cookie(auth.session)
+            
+            # If the user has pending WhatsApp info to update, do it now
+            if 'whatsapp_info' in st.session_state:
+                whatsapp_info = st.session_state.whatsapp_info
+                update_user_whatsapp(
+                    whatsapp_info['phone'], 
+                    whatsapp_info['share']
+                )
+                # Remove the temporary data
+                del st.session_state.whatsapp_info
+            
+            st.session_state.current_page = "all"  # Redirect to all items page after login
+            st.success("Login successful!")
+            return True
+            
+        except Exception as auth_error:
+            # Check for specific authentication errors
+            error_str = str(auth_error)
+            if "Invalid login credentials" in error_str:
+                st.error("Invalid email or password")
+            elif "Email not confirmed" in error_str:
+                st.error("Please confirm your email address first")
+            else:
+                st.error(f"Login failed: {str(auth_error)}")
+                # Show detailed error in development mode
+                if os.getenv('ENVIRONMENT') == 'development':
+                    st.error(traceback.format_exc())
+            return False
+            
     except Exception as e:
         st.error(f"Login failed: {str(e)}")
         st.error(traceback.format_exc())
@@ -73,45 +135,97 @@ def signup(email: str, password: str, first_name: str, last_name: str):
         st.write("Attempting to sign up...")
         
         try:
+            # Create auth user with email and password
             auth = st.session_state.supabase.auth.sign_up({
                 "email": email,
-                "password": password
+                "password": password,
+                "options": {
+                    "data": {
+                        "first_name": first_name,
+                        "last_name": last_name
+                    }
+                }
             })
             
             if auth.user:
-                # Create the user record in our users table with name fields
-                user_data = {
-                    'id': auth.user.id,
-                    'email': auth.user.email,
-                    'first_name': first_name,
-                    'last_name': last_name,
-                    'role': 'user'
-                }
+                # Debug output to verify user info from auth response
+                if os.getenv('ENVIRONMENT') == 'development':
+                    st.write(f"Auth user ID: {auth.user.id}")
+                    st.write(f"Auth user email from response: {auth.user.email}")
+                    st.write(f"Auth user metadata: {auth.user.user_metadata}")
                 
-                # Add WhatsApp information if available
-                if whatsapp_phone:
-                    user_data['whatsapp_phone'] = whatsapp_phone
-                    user_data['share_whatsapp_for_items'] = share_whatsapp
+                # Check if the user already has been added to the public.users table
+                # This might happen automatically via database trigger
+                user_exists_query = st.session_state.supabase.table('users').select('*').eq('id', auth.user.id).execute()
                 
-                try:
-                    st.session_state.supabase.table('users').insert(user_data).execute()
-                except Exception as db_error:
-                    # Check if this is a duplicate key error
-                    error_str = str(db_error)
-                    if "duplicate key" in error_str and "users_pkey" in error_str:
-                        st.error(t('account_already_exists'))
-                        # Try to clean up the auth user since we couldn't create the profile
+                # Only create user record if it doesn't already exist
+                if not user_exists_query.data:
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.warning("Trigger did not create user record. Creating manually...")
+                
+                    # Create the user record in our users table with name fields
+                    user_data = {
+                        'id': auth.user.id,  # Use the same ID from auth.users
+                        'email': email,      # Add email to public.users table
+                        'first_name': first_name,
+                        'last_name': last_name,
+                        'role': 'user'
+                    }
+                    
+                    # Add WhatsApp information if available
+                    if whatsapp_phone:
+                        user_data['whatsapp_phone'] = whatsapp_phone
+                        user_data['share_whatsapp_for_items'] = share_whatsapp
+                    
+                    # Debug output in development mode
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.write("User data to be inserted:")
+                        st.write(user_data)
+                    
+                    try:
+                        response = st.session_state.supabase.table('users').insert(user_data).execute()
+                        
+                        # Debug output in development mode
+                        if os.getenv('ENVIRONMENT') == 'development':
+                            st.write("Insert response:")
+                            st.write(response.data if hasattr(response, 'data') else "No response data")
+                    except Exception as db_error:
+                        # Check if this is a duplicate key error
+                        error_str = str(db_error)
+                        if "duplicate key" in error_str and "users_pkey" in error_str:
+                            st.error(t('account_already_exists'))
+                            # Try to clean up the auth user since we couldn't create the profile
+                            try:
+                                # This might not always work depending on permissions
+                                st.session_state.supabase.auth.admin.delete_user(auth.user.id)
+                            except:
+                                pass
+                            return False
+                        else:
+                            if os.getenv('ENVIRONMENT') == 'development':
+                                st.error(f"Database error: {str(db_error)}")
+                                st.error(traceback.format_exc())
+                            # Re-raise if it's a different error
+                            raise
+                else:
+                    # User was created by trigger, but may not have WhatsApp info
+                    if whatsapp_phone and (not user_exists_query.data[0].get('whatsapp_phone') or 
+                                          not user_exists_query.data[0].get('share_whatsapp_for_items')):
                         try:
-                            # This might not always work depending on permissions
-                            st.session_state.supabase.auth.admin.delete_user(auth.user.id)
-                        except:
-                            pass
-                        return False
-                    else:
-                        # Re-raise if it's a different error
-                        raise
+                            # Update the WhatsApp info
+                            st.session_state.supabase.table('users').update({
+                                'whatsapp_phone': whatsapp_phone,
+                                'share_whatsapp_for_items': share_whatsapp
+                            }).eq('id', auth.user.id).execute()
+                            
+                            if os.getenv('ENVIRONMENT') == 'development':
+                                st.success("Updated WhatsApp information")
+                        except Exception as e:
+                            if os.getenv('ENVIRONMENT') == 'development':
+                                st.error(f"Failed to update WhatsApp info: {str(e)}")
                 
-            return True
+                st.success("Account created successfully! Please proceed to login.")
+                return True
             
         except Exception as auth_error:
             # Check for Supabase auth errors that indicate duplicate email
@@ -120,15 +234,18 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                 st.error(t('account_already_exists'))
                 return False
             else:
+                if os.getenv('ENVIRONMENT') == 'development':
+                    st.error(f"Auth error: {str(auth_error)}")
+                    st.error(traceback.format_exc())
                 # Re-raise if it's a different error
                 raise
                 
     except Exception as e:
         # Generic error handling
         st.error(t('signup_failed'))
-        if st.session_state.get('debug_mode', False):
-            st.error(f"Error details: {str(e)}")
-            st.error(traceback.format_exc())
+        # Always show error details - helps with debugging in production
+        st.error(f"Error details: {str(e)}")
+        st.error(traceback.format_exc())
         return False
 
 def logout():
