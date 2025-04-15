@@ -133,58 +133,16 @@ def add_item(item_data, image=None):
             st.error("User not authenticated")
             return None
             
-        # Ensure user_id is included in the item data and properly formatted
-        if 'user_id' not in item_data:
-            # Make sure the user ID is a string - sometimes UUID objects cause issues
-            user_id = st.session_state.user.id
-            if hasattr(user_id, 'hex'):  # If it's a UUID object
-                user_id = str(user_id)
-            item_data['user_id'] = user_id
-
-        # Add debug output in development mode
-        if is_development:
-            st.write(f"Adding new item: {item_data}")
-            st.write(f"User ID type: {type(item_data['user_id'])}")
-            
-            # Get and print the SQL query that would be executed
-            try:
-                query_obj = st.session_state.supabase.table('items').insert(item_data)
-                
-                if hasattr(query_obj, '_Builder__prepared_query'):
-                    st.write(f"Debug SQL Query: {query_obj._Builder__prepared_query}")
-                elif hasattr(query_obj, 'query'):
-                    st.write(f"Debug SQL Query: {query_obj.query}")
-            except Exception as query_debug_err:
-                st.write(f"Error getting query debug info: {str(query_debug_err)}")
-            
         # First create the item
-        try:
-            response = st.session_state.supabase.table('items')\
-                .insert(item_data)\
-                .execute()
-            
-            if is_development:
-                st.write(f"Insert response: {response}")
-                st.write(f"Response type: {type(response)}")
-                st.write(f"Response attributes: {dir(response)}")
-                
-                if hasattr(response, 'data'):
-                    st.write(f"Response data: {response.data}")
-                if hasattr(response, 'error'):
-                    st.write(f"Response error: {response.error}")
-                
-            if not response.data:
-                st.error("Failed to create item. Please check your permissions.")
-                return None
-                
-            item = response.data[0]
-        except Exception as insert_error:
-            st.error(f"Database insert error: {str(insert_error)}")
-            if hasattr(insert_error, 'json'):
-                error_data = insert_error.json()
-                st.error(f"API error details: {error_data}")
-            st.error(traceback.format_exc())
+        response = st.session_state.supabase.table('items')\
+            .insert(item_data)\
+            .execute()
+        
+        if not response.data:
+            st.error("Failed to create item. Please check your permissions.")
             return None
+            
+        item = response.data[0]
         
         # If there's an image, upload it
         if image:
@@ -192,54 +150,39 @@ def add_item(item_data, image=None):
             file_extension = image.name.split('.')[-1]
             filename = f"{item['id']}/{uuid.uuid4()}.{file_extension}"
             
-            try:
-                # Upload the image to Supabase Storage
-                storage_response = st.session_state.supabase.storage\
-                    .from_('item-images')\
-                    .upload(filename, image.getvalue(), {
-                        'content-type': f'image/{file_extension}'
-                    })
-                
-                # Get the public URL of the uploaded image
-                image_url = st.session_state.supabase.storage\
-                    .from_('item-images')\
-                    .get_public_url(filename)
-                
-                # Add the image reference to the item_images table
-                img_response = st.session_state.supabase.table('item_images')\
-                    .insert({
-                        'item_id': item['id'],
-                        'image_url': image_url,
-                        'is_primary': True
-                    })\
-                    .execute()
-                    
-                if is_development and not img_response.data:
-                    st.warning("Image was uploaded but database reference was not created")
-                
-                # Generate and store sales photos
-                generate_and_store_sales_photos(
-                    st.session_state.supabase,
-                    item['id'], 
-                    image_url, 
-                    item_data['price_usd'], 
-                    item_data['price_local'], 
-                    item_data['name']
-                )
-                
-                # Update the item with the image URL
-                item['image_url'] = image_url
-            except Exception as image_error:
-                st.error(f"Image upload error: {str(image_error)}")
-                if hasattr(image_error, 'json'):
-                    error_data = image_error.json()
-                    st.error(f"API error details: {error_data}")
-                st.error(traceback.format_exc())
-                # Continue execution - we'll return the item even if image upload fails
-                
-        # Debug confirmation in development mode
-        if is_development:
-            st.write(f"Item added successfully: {item}")
+            # Upload the image to Supabase Storage
+            storage_response = st.session_state.supabase.storage\
+                .from_('item-images')\
+                .upload(filename, image.getvalue(), {
+                    'content-type': f'image/{file_extension}'
+                })
+            
+            # Get the public URL of the uploaded image
+            image_url = st.session_state.supabase.storage\
+                .from_('item-images')\
+                .get_public_url(filename)
+            
+            # Add the image reference to the item_images table
+            st.session_state.supabase.table('item_images')\
+                .insert({
+                    'item_id': item['id'],
+                    'image_url': image_url,
+                    'is_primary': True
+                })\
+                .execute()
+            
+            # Generate and store sales photos
+            generate_and_store_sales_photos(
+                st.session_state.supabase,
+                item['id'], 
+                image_url, 
+                item_data['price_usd'], 
+                item_data['price_local'], 
+                item_data['name']
+            )
+            
+            # Update the item with the image URL
+            item['image_url'] = image_url
             
         return item
     except Exception as e:
@@ -273,55 +216,17 @@ def update_item(item_id, item_data, image=None):
             
         current_item = current_item.data[0]
         
-        # Add debug output in development mode
-        if is_development:
-            st.write(f"Updating item: {item_id}")
-            st.write(f"Current data: {current_item}")
-            st.write(f"New data: {item_data}")
-            st.write(f"User ID: {st.session_state.user.id}")
-            
-            # Get and print the SQL query that would be executed
-            try:
-                query_obj = st.session_state.supabase.table('items')\
-                    .update(item_data)\
-                    .eq('id', item_id)
-                
-                if hasattr(query_obj, '_Builder__prepared_query'):
-                    st.write(f"Debug SQL Query: {query_obj._Builder__prepared_query}")
-                elif hasattr(query_obj, 'query'):
-                    st.write(f"Debug SQL Query: {query_obj.query}")
-            except Exception as query_debug_err:
-                st.write(f"Error getting query debug info: {str(query_debug_err)}")
-        
         # Update the item
-        try:
-            response = st.session_state.supabase.table('items')\
-                .update(item_data)\
-                .eq('id', item_id)\
-                .execute()
-                
-            if is_development:
-                st.write(f"Update response: {response}")
-                st.write(f"Response type: {type(response)}")
-                st.write(f"Response attributes: {dir(response)}")
-                
-                if hasattr(response, 'data'):
-                    st.write(f"Response data: {response.data}")
-                if hasattr(response, 'error'):
-                    st.write(f"Response error: {response.error}")
-            
-            if not response.data:
-                st.error("Error: Item update query returned no data")
-                return None
-                
-            item = response.data[0]
-        except Exception as update_error:
-            st.error(f"Database update error: {str(update_error)}")
-            if hasattr(update_error, 'json'):
-                error_data = update_error.json()
-                st.error(f"API error details: {error_data}")
-            st.error(traceback.format_exc())
+        response = st.session_state.supabase.table('items')\
+            .update(item_data)\
+            .eq('id', item_id)\
+            .execute()
+        
+        if not response.data:
+            st.error("Error: Item update query returned no data")
             return None
+            
+        item = response.data[0]
         
         # Check if we need to regenerate photos
         should_regenerate = (
@@ -395,10 +300,6 @@ def update_item(item_id, item_data, image=None):
         
         # Clear all caches to ensure fresh data
         st.cache_data.clear()
-        
-        # Debug confirmation in development mode
-        if is_development:
-            st.write(f"Item updated successfully: {item}")
         
         return item
     except Exception as e:

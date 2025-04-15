@@ -8,118 +8,88 @@ import traceback
 
 def render_edit_modal(rerun_callback=None):
     """Render the edit item modal when triggered"""
-    try:
-        if 'show_edit_modal' in st.session_state:
-            if is_development:
-                st.write(f"Debug: Edit modal trigger state: {st.session_state.show_edit_modal}")
+    if st.session_state.get('show_edit_modal') and st.session_state.get('editing_item'):
+        with st.form("edit_item_form"):
+            item = st.session_state.editing_item
             
-        if 'editing_item' in st.session_state:
-            if is_development:
-                st.write(f"Debug: Editing item: {st.session_state.get('editing_item')}")
-        
-        if st.session_state.get('show_edit_modal') and st.session_state.get('editing_item'):
-            with st.form("edit_item_form"):
-                item = st.session_state.editing_item
+            # Wrap the entire form in the compact-form class
+            st.markdown('<div class="compact-form">', unsafe_allow_html=True)
+            
+            # Name field
+            name = st.text_input(t('item_name'), value=item['name'])
+            
+            # Price fields in a row
+            col1, col2 = st.columns(2)
+            with col1:
+                price_usd = st.number_input("USD", min_value=0, value=int(item.get('price_usd', 0) or 0))
+            with col2:
+                price_local = st.number_input("LOCAL", min_value=0, value=int(item.get('price_local', 0) or 0))
+            
+            # Status and sold_to in a row
+            col1, col2 = st.columns([3, 2])
+            with col1:
+                status_options = {
+                    'available': ('🏷️ ' + t('status_available'), 'status-available'),
+                    'paid_pending_pickup': ('💰 ' + t('status_paid'), 'status-paid'),
+                    'claimed_not_paid': ('⏳ ' + t('status_claimed'), 'status-claimed'),
+                    'paid_picked_up': ('✅ ' + t('status_complete'), 'status-complete')
+                }
                 
-                # Wrap the entire form in the compact-form class
-                st.markdown('<div class="compact-form">', unsafe_allow_html=True)
+                current_status = item.get('sale_status')
+                selected_status = current_status if current_status in status_options else 'available'
                 
-                # Name field
-                name = st.text_input(t('item_name'), value=item['name'])
+                status_display = {text: key for key, (text, _) in status_options.items()}
+                selected_status_text = next(text for key, (text, _) in status_options.items() if key == selected_status)
                 
-                # Price fields in a row
-                col1, col2 = st.columns(2)
-                with col1:
-                    price_usd = st.number_input("USD", min_value=0, value=int(item.get('price_usd', 0) or 0))
-                with col2:
-                    price_local = st.number_input("LOCAL", min_value=0, value=int(item.get('price_local', 0) or 0))
-                
-                # Status and sold_to in a row
-                col1, col2 = st.columns([3, 2])
-                with col1:
-                    status_options = {
-                        'available': ('🏷️ ' + t('status_available'), 'status-available'),
-                        'paid_pending_pickup': ('💰 ' + t('status_paid'), 'status-paid'),
-                        'claimed_not_paid': ('⏳ ' + t('status_claimed'), 'status-claimed'),
-                        'paid_picked_up': ('✅ ' + t('status_complete'), 'status-complete')
+                new_status_text = st.radio(
+                    "Status",
+                    options=list(status_display.keys()),
+                    index=list(status_display.keys()).index(selected_status_text),
+                    horizontal=True,
+                    label_visibility="collapsed"
+                )
+                selected_status = status_display[new_status_text]
+            
+            with col2:
+                sold_to = ""
+                if selected_status != 'available':
+                    sold_to = st.text_input("Sold to", value=item.get('sold_to', ''), label_visibility="collapsed", placeholder="Sold to")
+            
+            # Optional image upload
+            image = st.file_uploader(t('upload_new_image'), type=["jpg", "jpeg", "png"])
+            
+            # Add buttons in a row at the bottom
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                submit = st.form_submit_button(t('save_changes'))
+                if submit:
+                    item_data = {
+                        "name": name,
+                        "price_usd": int(price_usd) if price_usd > 0 else None,
+                        "price_local": int(price_local) if price_local > 0 else None,
+                        "sale_status": selected_status,
+                        "is_sold": selected_status == 'paid_picked_up',
+                        "user_id": st.session_state.user.id
                     }
-                    
-                    current_status = item.get('sale_status')
-                    selected_status = current_status if current_status in status_options else 'available'
-                    
-                    status_display = {text: key for key, (text, _) in status_options.items()}
-                    selected_status_text = next(text for key, (text, _) in status_options.items() if key == selected_status)
-                    
-                    new_status_text = st.radio(
-                        "Status",
-                        options=list(status_display.keys()),
-                        index=list(status_display.keys()).index(selected_status_text),
-                        horizontal=True,
-                        label_visibility="collapsed"
-                    )
-                    selected_status = status_display[new_status_text]
-                
-                with col2:
-                    sold_to = ""
-                    if selected_status != 'available':
-                        sold_to = st.text_input("Sold to", value=item.get('sold_to', ''), label_visibility="collapsed", placeholder="Sold to")
-                
-                # Optional image upload
-                image = st.file_uploader(t('upload_new_image'), type=["jpg", "jpeg", "png"])
-                
-                # Add buttons in a row at the bottom
-                col1, col2 = st.columns([1, 1])
-                with col1:
-                    submit = st.form_submit_button(t('save_changes'))
-                    if submit:
-                        item_data = {
-                            "name": name,
-                            "price_usd": int(price_usd) if price_usd > 0 else None,
-                            "price_local": int(price_local) if price_local > 0 else None,
-                            "sale_status": selected_status,
-                            "is_sold": selected_status == 'paid_picked_up',
-                        }
-                        
-                        # Add user_id with proper formatting
-                        if st.session_state.user:
-                            user_id = st.session_state.user.id
-                            if hasattr(user_id, 'hex'):  # If it's a UUID object
-                                user_id = str(user_id)
-                            item_data['user_id'] = user_id
-                            
-                        if selected_status != 'available' and sold_to:
-                            item_data['sold_to'] = sold_to
-                            
-                        if is_development:
-                            st.write(f"Debug: Submitting update with data: {item_data}")
-                            
-                        updated_item = update_item(item['id'], item_data, image)
-                        if updated_item:
-                            st.success(t('item_updated'))
-                            st.session_state.show_edit_modal = False
-                            st.session_state.editing_item = None
-                            # Clear the cache to force reload of items
-                            st.cache_data.clear()
-                            if rerun_callback:
-                                rerun_callback()
-                with col2:
-                    if st.form_submit_button(t('cancel')):
+                    if selected_status != 'available' and sold_to:
+                        item_data['sold_to'] = sold_to
+                    updated_item = update_item(item['id'], item_data, image)
+                    if updated_item:
+                        st.success(t('item_updated'))
                         st.session_state.show_edit_modal = False
                         st.session_state.editing_item = None
+                        # Clear the cache to force reload of items
+                        st.cache_data.clear()
                         if rerun_callback:
                             rerun_callback()
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            if is_development:
-                if not st.session_state.get('show_edit_modal'):
-                    st.error("Debug: show_edit_modal is not set to True")
-                if not st.session_state.get('editing_item'):
-                    st.error("Debug: editing_item is not set or is None")
-    except Exception as e:
-        st.error(f"Error in render_edit_modal: {str(e)}")
-        if is_development:
-            st.error(traceback.format_exc())
+            with col2:
+                if st.form_submit_button(t('cancel')):
+                    st.session_state.show_edit_modal = False
+                    st.session_state.editing_item = None
+                    if rerun_callback:
+                        rerun_callback()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
 
 def render_item_grid(items, enable_edit=True, rerun_callback=None):
     """Render a grid of items"""
@@ -182,15 +152,9 @@ def render_item_grid(items, enable_edit=True, rerun_callback=None):
             
             with col3:
                 if enable_edit and st.button(t('edit'), key=f"edit_{item['id']}", type="secondary", use_container_width=True):
-                    if is_development:
-                        st.write(f"Debug: Edit button clicked for item {item['id']}")
                     st.session_state.editing_item = item
                     st.session_state.show_edit_modal = True
-                    if is_development:
-                        st.write(f"Debug: Session state after edit button: show_edit_modal={st.session_state.show_edit_modal}, editing_item={st.session_state.editing_item != None}")
                     if rerun_callback:
-                        if is_development:
-                            st.write("Debug: Calling rerun_callback")
                         rerun_callback()
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -200,110 +164,81 @@ def render_add_item_form(rerun_callback=None):
     
     st.title(t('add_item'))
     
-    try:
-        with st.form("add_item_form"):
-            # Wrap the entire form in the compact-form class
-            st.markdown('<div class="compact-form">', unsafe_allow_html=True)
+    with st.form("add_item_form"):
+        # Wrap the entire form in the compact-form class
+        st.markdown('<div class="compact-form">', unsafe_allow_html=True)
+        
+        # Name field
+        name = st.text_input(t('item_name'))
+        
+        # Price fields in a row
+        col1, col2 = st.columns(2)
+        with col1:
+            price_usd = st.number_input("USD", min_value=0, value=0)
+        with col2:
+            price_local = st.number_input("LOCAL", min_value=0, value=0)
+        
+        # Status and sold_to in a row
+        col1, col2 = st.columns([3, 2])
+        with col1:
+            status_options = {
+                'available': ('🏷️ ' + t('status_available'), 'status-available'),
+                'paid_pending_pickup': ('💰 ' + t('status_paid'), 'status-paid'),
+                'claimed_not_paid': ('⏳ ' + t('status_claimed'), 'status-claimed'),
+                'paid_picked_up': ('✅ ' + t('status_complete'), 'status-complete')
+            }
             
-            # Name field
-            name = st.text_input(t('item_name'))
+            status_display = {text: key for key, (text, _) in status_options.items()}
             
-            # Price fields in a row
-            col1, col2 = st.columns(2)
-            with col1:
-                price_usd = st.number_input("USD", min_value=0, value=0)
-            with col2:
-                price_local = st.number_input("LOCAL", min_value=0, value=0)
-            
-            # Status and sold_to in a row
-            col1, col2 = st.columns([3, 2])
-            with col1:
-                status_options = {
-                    'available': ('🏷️ ' + t('status_available'), 'status-available'),
-                    'paid_pending_pickup': ('💰 ' + t('status_paid'), 'status-paid'),
-                    'claimed_not_paid': ('⏳ ' + t('status_claimed'), 'status-claimed'),
-                    'paid_picked_up': ('✅ ' + t('status_complete'), 'status-complete')
+            new_status_text = st.radio(
+                "Status",
+                options=list(status_display.keys()),
+                horizontal=True,
+                label_visibility="collapsed"
+            )
+            selected_status = status_display[new_status_text]
+        
+        with col2:
+            sold_to = ""
+            if selected_status != 'available':
+                sold_to = st.text_input("Sold to", label_visibility="collapsed", placeholder="Sold to")
+        
+        # Optional image upload
+        image = st.file_uploader(t('upload_image'), type=["jpg", "jpeg", "png"])
+        
+        submit = st.form_submit_button(t('add_item_button'))
+        if submit:
+            if not name:
+                st.error(t('fill_required_fields'))
+            else:
+                item_data = {
+                    "name": name,
+                    "price_usd": int(price_usd) if price_usd > 0 else None,
+                    "price_local": int(price_local) if price_local > 0 else None,
+                    "user_id": st.session_state.user.id,
+                    "sale_status": selected_status,
+                    "is_sold": selected_status == 'paid_picked_up'
                 }
                 
-                status_display = {text: key for key, (text, _) in status_options.items()}
+                # Ensure at least one price is set
+                if price_usd <= 0 and price_local <= 0:
+                    st.error("Please enter at least one price (USD or Local)")
+                    return
                 
-                new_status_text = st.radio(
-                    "Status",
-                    options=list(status_display.keys()),
-                    horizontal=True,
-                    label_visibility="collapsed"
-                )
-                selected_status = status_display[new_status_text]
-            
-            with col2:
-                sold_to = ""
-                if selected_status != 'available':
-                    sold_to = st.text_input("Sold to", label_visibility="collapsed", placeholder="Sold to")
-            
-            # Optional image upload
-            image = st.file_uploader(t('upload_image'), type=["jpg", "jpeg", "png"])
-            
-            submit = st.form_submit_button(t('add_item_button'))
-            if submit:
-                if is_development:
-                    st.write("Debug: Add item form submitted")
+                if selected_status != 'available' and sold_to:
+                    item_data['sold_to'] = sold_to
                 
-                if not name:
-                    st.error(t('fill_required_fields'))
-                else:
-                    item_data = {
-                        "name": name,
-                        "price_usd": int(price_usd) if price_usd > 0 else None,
-                        "price_local": int(price_local) if price_local > 0 else None,
-                        "sale_status": selected_status,
-                        "is_sold": selected_status == 'paid_picked_up'
-                    }
-                    
-                    # Add user_id with proper formatting
-                    if st.session_state.user:
-                        user_id = st.session_state.user.id
-                        if hasattr(user_id, 'hex'):  # If it's a UUID object
-                            user_id = str(user_id)
-                        item_data['user_id'] = user_id
-                    
-                    if is_development:
-                        st.write(f"Debug: Prepared item data: {item_data}")
-                        st.write(f"Debug: User ID type: {type(item_data.get('user_id', None))}")
-                    
-                    # Ensure at least one price is set
-                    if price_usd <= 0 and price_local <= 0:
-                        st.error("Please enter at least one price (USD or Local)")
-                        return
-                    
-                    if selected_status != 'available' and sold_to:
-                        item_data['sold_to'] = sold_to
-                    
-                    if is_development:
-                        st.write("Debug: Calling add_item function")
-                    
-                    new_item = add_item(item_data, image)
-                    
-                    if is_development:
-                        st.write(f"Debug: Result from add_item: {new_item}")
-                    
-                    if new_item:
-                        st.success(t('item_added'))
-                        # Clear the cache to force reload of items
-                        st.cache_data.clear()
-                        # Switch to the available items view
-                        st.session_state.current_page = 'available'
-                        if rerun_callback:
-                            if is_development:
-                                st.write("Debug: Calling rerun_callback after successful add")
-                            rerun_callback()
-                    else:
-                        st.error("Failed to add item. Please check the console for details.")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-    except Exception as e:
-        st.error(f"Error in add item form: {str(e)}")
-        if is_development:
-            st.error(traceback.format_exc())
+                new_item = add_item(item_data, image)
+                if new_item:
+                    st.success(t('item_added'))
+                    # Clear the cache to force reload of items
+                    st.cache_data.clear()
+                    # Switch to the available items view
+                    st.session_state.current_page = 'available'
+                    if rerun_callback:
+                        rerun_callback()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_sold_to_view(items):
     """Render items grouped by sold_to"""
