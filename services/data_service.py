@@ -18,13 +18,16 @@ load_dotenv()
 def debug_env():
     st.write("Environment Variables:")
     st.write(f"SUPABASE_URL: {'Set' if os.getenv('SUPABASE_URL') else 'Not Set'}")
+    st.write(f"SUPABASE_KEY: {'Set' if os.getenv('SUPABASE_KEY') else 'Not Set'}")
     st.write(f"SUPABASE_SERVICE_ROLE_KEY: {'Set' if os.getenv('SUPABASE_SERVICE_ROLE_KEY') else 'Not Set'}")
 
 # Initialize Supabase client
 def init_supabase():
     try:
         url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Use service role key for auth
+        
+        # For authentication, use the anon key
+        key = os.getenv("SUPABASE_KEY")
         
         if not url or not key:
             st.error("Missing Supabase credentials. Please check your .env file.")
@@ -40,11 +43,14 @@ def init_supabase():
 # Initialize Supabase PostgREST client for data operations
 async def init_postgrest():
     if 'postgrest_client' not in st.session_state:
+        # For data operations, we use the service role key
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        
         st.session_state.postgrest_client = AsyncPostgrestClient(
             base_url=f"{os.getenv('SUPABASE_URL')}/rest/v1",
             headers={
-                "apikey": os.getenv('SUPABASE_SERVICE_ROLE_KEY'),  # Use service role key
-                "Authorization": f"Bearer {os.getenv('SUPABASE_SERVICE_ROLE_KEY')}"  # Use service role key
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}"
             }
         )
 

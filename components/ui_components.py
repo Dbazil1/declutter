@@ -1,5 +1,6 @@
 import streamlit as st
 import time
+import os
 
 def check_auth_cookies():
     """Component to check for auth tokens in localStorage and transfer to session state"""
@@ -514,6 +515,13 @@ def render_login_ui():
                         if 'last_signup_email' in st.session_state:
                             del st.session_state.last_signup_email
                         st.rerun()
+            
+            # Debug option - only visible in development
+            if os.getenv('ENVIRONMENT') == 'development':
+                if st.button("🔧 Debug Connection", key="debug_connection"):
+                    from services.data_service import debug_env
+                    debug_env()
+                    st.write("Supabase client initialized with:", st.session_state.supabase.auth.url)
         
         with tab2:  # Signup tab
             # Show success message above the form if exists
