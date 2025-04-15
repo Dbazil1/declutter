@@ -1,6 +1,24 @@
 import streamlit as st
 import time
 import os
+import traceback
+from utils.translation_utils import t
+
+# Set development mode flag
+is_development = os.getenv('ENVIRONMENT', '').lower() == 'development'
+
+def show_error_message(error, details=None):
+    """Display an error message with optional details in development mode."""
+    st.error(error)
+    if is_development and details:
+        st.error(f"Details: {details}")
+        st.error(traceback.format_exc())
+
+def show_success_message(message):
+    """Display a success message."""
+    st.success(message)
+    if is_development:
+        st.write(f"Debug: {message}")
 
 def apply_custom_css():
     # Add custom CSS to make sidebar thinner and fit content

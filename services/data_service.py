@@ -10,6 +10,10 @@ import random
 import string
 from utils.image_utils import generate_and_store_sales_photos
 import datetime
+from utils.translation_utils import t
+
+# Set development mode flag
+is_development = os.getenv('ENVIRONMENT', '').lower() == 'development'
 
 # Load environment variables
 load_dotenv()
@@ -45,7 +49,7 @@ def init_supabase():
         try:
             client = create_client(url, key)
             # Test the connection
-            if os.getenv('ENVIRONMENT') == 'development':
+            if is_development:
                 st.write("Attempting to connect to Supabase...")
                 # Simple query to test connection
                 try:
@@ -472,7 +476,7 @@ def check_user_details(user_id):
         # Try to get user details
         response = client.table('users').select('*').eq('id', user_id).execute()
         
-        if os.getenv('ENVIRONMENT') == 'development':
+        if is_development:
             st.write(f"Service role query returned: {response.data}")
             
         return response.data
@@ -484,24 +488,38 @@ def check_user_details(user_id):
 
 # Get user details safely, trying multiple methods
 def get_user_details_safely(user_id):
-    """Get user details using multiple fallback methods"""
+    """Safely get user details from the database with multiple fallback methods."""
     try:
-        # First, try with regular client
-        response = st.session_state.supabase.table('users').select('*').eq('id', user_id).execute()
+        if is_development:
+            st.write(f"Debug: Attempting to get user details for ID: {user_id}")
         
-        if response and hasattr(response, 'data') and response.data:
+        # Try with service role first
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        client = create_client(url, service_key)
+        
+        response = client.table('users').select('*').eq('id', user_id).execute()
+        
+        if response.data and len(response.data) > 0:
+            if is_development:
+                st.write(f"Debug: Successfully retrieved user details with service role")
             return response.data[0]
+        
+        # If that fails, try with the current user's token
+        if st.session_state.get('supabase'):
+            response = st.session_state.supabase.table('users').select('*').eq('id', user_id).execute()
             
-        # If that fails, try with service role
-        service_data = check_user_details(user_id)
-        if service_data and len(service_data) > 0:
-            return service_data[0]
-            
-        # If still no data, return None
+            if response.data and len(response.data) > 0:
+                if is_development:
+                    st.write(f"Debug: Successfully retrieved user details with user token")
+                return response.data[0]
+        
+        if is_development:
+            st.write("Debug: Failed to retrieve user details with both methods")
         return None
+        
     except Exception as e:
-        if os.getenv('ENVIRONMENT') == 'development':
-            st.error(f"Error getting user details safely: {str(e)}")
-            import traceback
+        if is_development:
+            st.error(f"Error getting user details: {str(e)}")
             st.error(traceback.format_exc())
         return None 

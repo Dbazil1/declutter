@@ -4,6 +4,10 @@ import json
 from utils.translation_utils import t
 from services.data_service import update_user_whatsapp
 import os
+from supabase import create_client
+
+# Set development mode flag
+is_development = os.getenv('ENVIRONMENT', '').lower() == 'development'
 
 # Authentication functions
 def login(email: str, password: str):
@@ -20,7 +24,7 @@ def login(email: str, password: str):
             })
             
             # Debug information about the auth response
-            if os.getenv('ENVIRONMENT') == 'development':
+            if is_development:
                 st.write(f"Auth successful, user ID: {auth.user.id}")
                 st.write(f"User email from auth: {auth.user.email}")
                 st.write(f"User metadata: {auth.user.user_metadata}")
@@ -33,7 +37,7 @@ def login(email: str, password: str):
             if not user_record.data:
                 # The user exists in auth.users but not in public.users
                 # This can happen if the trigger failed or if we're migrating users
-                if os.getenv('ENVIRONMENT') == 'development':
+                if is_development:
                     st.warning("User not found in public.users table, creating record now...")
                 
                 # Try to extract first/last name from auth metadata
@@ -52,16 +56,16 @@ def login(email: str, password: str):
                 
                 try:
                     insert_response = st.session_state.supabase.table('users').insert(user_data).execute()
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.success("User record created in public.users table")
                         st.write(f"Insert response: {insert_response.data if hasattr(insert_response, 'data') else None}")
                 except Exception as create_error:
                     # Log error but don't fail login
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.error(f"Failed to create user record: {str(create_error)}")
                         st.error(traceback.format_exc())
             else:
-                if os.getenv('ENVIRONMENT') == 'development':
+                if is_development:
                     st.success(f"Found existing user record: {user_record.data}")
             
             # Clear all cached data when logging in
@@ -73,7 +77,7 @@ def login(email: str, password: str):
             # If the user has pending WhatsApp info to update, do it now
             if 'whatsapp_info' in st.session_state:
                 whatsapp_info = st.session_state.whatsapp_info
-                if os.getenv('ENVIRONMENT') == 'development':
+                if is_development:
                     st.write(f"Updating WhatsApp info during login: {whatsapp_info['phone']}")
                 update_result = update_user_whatsapp(
                     whatsapp_info['phone'], 
@@ -82,7 +86,7 @@ def login(email: str, password: str):
                 # Remove the temporary data
                 del st.session_state.whatsapp_info
                 
-                if os.getenv('ENVIRONMENT') == 'development':
+                if is_development:
                     if update_result:
                         st.success("WhatsApp information updated during login")
                     else:
@@ -102,7 +106,7 @@ def login(email: str, password: str):
             else:
                 st.error(f"Login failed: {str(auth_error)}")
                 # Show detailed error in development mode
-                if os.getenv('ENVIRONMENT') == 'development':
+                if is_development:
                     st.error(traceback.format_exc())
             return False
             
@@ -140,7 +144,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
             whatsapp_phone = st.session_state.whatsapp_info.get('phone')
             share_whatsapp = st.session_state.whatsapp_info.get('share', False)
             
-            if os.getenv('ENVIRONMENT') == 'development':
+            if is_development:
                 st.write(f"WhatsApp info in session: {whatsapp_phone}, Share: {share_whatsapp}")
             
         st.write("Attempting to sign up...")
@@ -160,7 +164,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
             
             if auth.user:
                 # Debug output to verify user info from auth response
-                if os.getenv('ENVIRONMENT') == 'development':
+                if is_development:
                     st.write(f"Auth user ID: {auth.user.id}")
                     st.write(f"Auth user email from response: {auth.user.email}")
                     st.write(f"Auth user metadata: {auth.user.user_metadata}")
@@ -175,7 +179,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                 
                 # Only create user record if it doesn't already exist
                 if not user_exists_query.data:
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.warning("Trigger did not create user record. Creating manually...")
                 
                     # Create the user record in our users table with name fields
@@ -193,7 +197,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                         user_data['share_whatsapp_for_items'] = share_whatsapp
                     
                     # Debug output in development mode
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.write("User data to be inserted:")
                         st.write(user_data)
                     
@@ -201,7 +205,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                         response = st.session_state.supabase.table('users').insert(user_data).execute()
                         
                         # Debug output in development mode
-                        if os.getenv('ENVIRONMENT') == 'development':
+                        if is_development:
                             st.write("Insert response:")
                             st.write(response.data if hasattr(response, 'data') else "No response data")
                     except Exception as db_error:
@@ -217,7 +221,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                                 pass
                             return False
                         else:
-                            if os.getenv('ENVIRONMENT') == 'development':
+                            if is_development:
                                 st.error(f"Database error: {str(db_error)}")
                                 st.error(traceback.format_exc())
                             # Re-raise if it's a different error
@@ -228,7 +232,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                         # Directly update WhatsApp info using the update function
                         whatsapp_updated = update_user_whatsapp(whatsapp_phone, share_whatsapp)
                         
-                        if os.getenv('ENVIRONMENT') == 'development':
+                        if is_development:
                             if whatsapp_updated:
                                 st.success("WhatsApp information updated successfully")
                             else:
@@ -247,7 +251,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                 st.error(t('account_already_exists'))
                 return False
             else:
-                if os.getenv('ENVIRONMENT') == 'development':
+                if is_development:
                     st.error(f"Auth error: {str(auth_error)}")
                     st.error(traceback.format_exc())
                 # Re-raise if it's a different error
@@ -303,7 +307,7 @@ def restore_auth_from_cookies():
         
         if auth_token and refresh_token:
             # Debug output in development mode
-            if os.getenv('ENVIRONMENT') == 'development':
+            if is_development:
                 st.write("Found auth tokens in session state, attempting to restore session")
             
             # Try to restore the session using the tokens
@@ -316,44 +320,44 @@ def restore_auth_from_cookies():
                 if user_response and user_response.user:
                     st.session_state.user = user_response.user
                     
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.write(f"Session restored for user: {user_response.user.email}")
                     
                     # Test a simple query to verify the token works
                     try:
                         test_query = st.session_state.supabase.table('users').select('id').limit(1).execute()
                         if test_query.data:
-                            if os.getenv('ENVIRONMENT') == 'development':
+                            if is_development:
                                 st.write("Database access verified with current token")
                             return True
                         else:
-                            if os.getenv('ENVIRONMENT') == 'development':
+                            if is_development:
                                 st.warning("Database access test returned no data, attempting to refresh token")
                             # Try to refresh the token
                             st.session_state.supabase.auth.refresh_session()
                             return True
                     except Exception as query_error:
-                        if os.getenv('ENVIRONMENT') == 'development':
+                        if is_development:
                             st.error(f"Database access test failed: {str(query_error)}")
                         # Token may be expired, try to refresh
                         try:
                             st.session_state.supabase.auth.refresh_session()
-                            if os.getenv('ENVIRONMENT') == 'development':
+                            if is_development:
                                 st.success("Token refreshed successfully")
                             return True
                         except:
-                            if os.getenv('ENVIRONMENT') == 'development':
+                            if is_development:
                                 st.error("Token refresh failed, clearing session")
                             clear_auth_cookies()
                             st.session_state.user = None
                 else:
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.warning("Failed to get user from session, clearing auth cookies")
                     clear_auth_cookies()
                     st.session_state.user = None
             except Exception as session_error:
                 # Token may be expired or invalid, clear cookies
-                if os.getenv('ENVIRONMENT') == 'development':
+                if is_development:
                     st.error(f"Error restoring session: {str(session_error)}")
                 clear_auth_cookies()
                 st.session_state.user = None
@@ -361,9 +365,64 @@ def restore_auth_from_cookies():
         return False
     except Exception as e:
         # If there's any error, ensure we're in a logged-out state
-        if os.getenv('ENVIRONMENT') == 'development':
+        if is_development:
             st.error(f"Unexpected error in restore_auth_from_cookies: {str(e)}")
             import traceback
             st.error(traceback.format_exc())
         st.session_state.user = None
         return False 
+
+def get_current_user():
+    """Get the current user from the session state."""
+    try:
+        if is_development:
+            st.write("Debug: Getting current user from session state")
+        
+        user = st.session_state.get('user')
+        
+        if is_development:
+            st.write(f"Debug: User object: {user}")
+        
+        return user
+    except Exception as e:
+        if is_development:
+            st.error(f"Error getting current user: {str(e)}")
+            st.error(traceback.format_exc())
+        return None
+
+def handle_auth_state():
+    """Handle the authentication state of the user."""
+    try:
+        if is_development:
+            st.write("Debug: Handling auth state")
+        
+        # Get the current auth state
+        auth_state = st.session_state.get('auth_state')
+        
+        if is_development:
+            st.write(f"Debug: Current auth state: {auth_state}")
+        
+        # If we don't have an auth state, we need to check if the user is logged in
+        if auth_state is None:
+            if is_development:
+                st.write("Debug: No auth state found, checking if user is logged in")
+            
+            user = get_current_user()
+            
+            if user:
+                if is_development:
+                    st.write("Debug: User found in session state")
+                st.session_state.auth_state = "authenticated"
+                return "authenticated"
+            else:
+                if is_development:
+                    st.write("Debug: No user found in session state")
+                st.session_state.auth_state = "needs_login"
+                return "needs_login"
+        
+        return auth_state
+    except Exception as e:
+        if is_development:
+            st.error(f"Error handling auth state: {str(e)}")
+            st.error(traceback.format_exc())
+        return None 

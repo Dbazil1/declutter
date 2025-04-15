@@ -12,8 +12,10 @@ def render_settings_page():
     # Get user info from session
     user = st.session_state.user
     
-    # Debug output in development mode
-    if os.getenv('ENVIRONMENT') == 'development':
+    # Debug output in development mode - only show if explicitly set to 'development'
+    is_development = os.getenv('ENVIRONMENT', '').lower() == 'development'
+    
+    if is_development:
         st.write(f"User ID: {user.id if user else None}")
         st.write(f"User email: {user.email if user else None}")
     
@@ -26,7 +28,7 @@ def render_settings_page():
             # Use our new safer function that tries multiple methods
             user_details = get_user_details_safely(user.id)
             
-            if os.getenv('ENVIRONMENT') == 'development':
+            if is_development:
                 st.write(f"User details retrieved: {user_details}")
             
             if not user_details:
@@ -34,7 +36,7 @@ def render_settings_page():
                 
                 # Try to create the user record if it doesn't exist
                 try:
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.info("Attempting to create user record...")
                     
                     # Extract metadata from user object if available
@@ -57,7 +59,7 @@ def render_settings_page():
                         'role': 'user'
                     }).execute()
                     
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.success("User record created successfully!")
                     
                     # Set default user details
@@ -69,7 +71,7 @@ def render_settings_page():
                         'share_whatsapp_for_items': False
                     }
                 except Exception as create_err:
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.error(f"Failed to create user record: {str(create_err)}")
                         st.error(traceback.format_exc())
                     
@@ -83,7 +85,7 @@ def render_settings_page():
                     }
     except Exception as e:
         st.error(f"Error loading user details: {str(e)}")
-        if os.getenv('ENVIRONMENT') == 'development':
+        if is_development:
             st.error(traceback.format_exc())
         user_details = {'first_name': '', 'last_name': ''}
     
@@ -129,7 +131,7 @@ def render_settings_page():
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.error(f"Error updating profile: {str(e)}")
                         st.error(traceback.format_exc())
                     st.error(t('error_updating_profile'))
@@ -203,7 +205,7 @@ def render_settings_page():
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    if os.getenv('ENVIRONMENT') == 'development':
+                    if is_development:
                         st.error(f"Error updating WhatsApp settings: {str(e)}")
                         st.error(traceback.format_exc())
                     st.error("Failed to update WhatsApp settings. Please try again.")

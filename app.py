@@ -2,6 +2,12 @@ import streamlit as st
 import asyncio
 import os
 from urllib.parse import urlparse
+from views.home_page import render_home_page
+from views.settings_page import render_settings_page
+from views.public_links_page import render_public_links_page
+from services.auth_service import get_current_user, handle_auth_state
+from utils.translation_utils import t
+import traceback
 
 # Import services
 from services.data_service import init_supabase, init_postgrest, load_items
@@ -14,15 +20,17 @@ from components.item_components import render_add_item_form
 # Import page renderers
 from views.items_page import render_items_page
 from views.photos_page import render_photos_page
-from views.public_links_page import render_public_links_page
 from views.public_page import render_public_page
-from views.settings_page import render_settings_page
 
-# Set page config
+# Set development mode flag
+is_development = os.getenv('ENVIRONMENT', '').lower() == 'development'
+
+# Configure the page
 st.set_page_config(
     page_title="Declutter",
-    page_icon="🏠",
-    layout="wide"
+    page_icon="🧹",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # Apply custom CSS
@@ -79,11 +87,11 @@ else:
             if user_info and hasattr(user_info, 'data') and user_info.data:
                 first_name = user_info.data[0].get('first_name', 'User')
                 
-            if os.getenv('ENVIRONMENT') == 'development':
+            if is_development:
                 st.write(f"Current user: {first_name} (ID: {st.session_state.user.id})")
         except Exception as e:
             # If there's an error getting user info, use a default name
-            if os.getenv('ENVIRONMENT') == 'development':
+            if is_development:
                 st.error(f"Error getting user info: {str(e)}")
                 import traceback
                 st.error(traceback.format_exc())
@@ -100,7 +108,7 @@ else:
         try:
             items = load_items()
         except Exception as e:
-            if os.getenv('ENVIRONMENT') == 'development':
+            if is_development:
                 st.error(f"Error loading items: {str(e)}")
                 import traceback
                 st.error(traceback.format_exc())
@@ -121,7 +129,58 @@ else:
                 render_settings_page()
         except Exception as page_error:
             st.error("An error occurred while loading this page. Please try again or contact support.")
-            if os.getenv('ENVIRONMENT') == 'development':
+            if is_development:
                 st.error(f"Page error: {str(page_error)}")
                 import traceback
                 st.error(traceback.format_exc())
+
+# Debug output in development mode
+if is_development:
+    st.write("Debug: Session state initialized")
+    st.write(f"Debug: Current page: {st.session_state.current_page}")
+    st.write(f"Debug: User: {st.session_state.user}")
+    st.write(f"Debug: Auth state: {st.session_state.auth_state}")
+
+# Main app logic
+try:
+    # Handle authentication state
+    auth_state = handle_auth_state()
+    
+    if is_development:
+        st.write(f"Debug: Auth state after handling: {auth_state}")
+    
+    if auth_state == "needs_login":
+        st.session_state.current_page = 'home'
+    elif auth_state == "authenticated":
+        # Only proceed if we have a valid user
+        if st.session_state.user and hasattr(st.session_state.user, 'id'):
+            if is_development:
+                st.write(f"Debug: User authenticated: {st.session_state.user.email}")
+            
+            # Render the appropriate page based on session state
+            if st.session_state.current_page == 'home':
+                render_home_page()
+            elif st.session_state.current_page == 'settings':
+                render_settings_page()
+            elif st.session_state.current_page == 'public_links':
+                render_public_links_page()
+            else:
+                render_home_page()
+        else:
+            if is_development:
+                st.write("Debug: User object is invalid or missing ID")
+            st.error("Authentication error. Please try logging in again.")
+            st.session_state.current_page = 'home'
+            render_home_page()
+    else:
+        if is_development:
+            st.write("Debug: Auth state is None or invalid")
+        st.error("Authentication error. Please try logging in again.")
+        st.session_state.current_page = 'home'
+        render_home_page()
+
+except Exception as e:
+    if is_development:
+        st.error(f"Error in main app: {str(e)}")
+        st.error(traceback.format_exc())
+    st.error("An error occurred. Please try again or contact support.")
