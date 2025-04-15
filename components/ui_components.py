@@ -391,7 +391,7 @@ def render_sidebar_nav(current_page, first_name, on_logout):
     st.sidebar.image("declutter-logo.png", use_container_width=True)
     
     # Keep All Items as full button
-    if st.sidebar.button("📋 " + "View All Your Items", key="nav_all", use_container_width=True):
+    if st.sidebar.button("📋 " + t('all_items'), key="nav_all", use_container_width=True):
         st.session_state.current_page = "all"
         st.rerun()
     
@@ -458,6 +458,15 @@ def render_sidebar_nav(current_page, first_name, on_logout):
 
     # Add bazil-dot-studio logo at the very bottom
     st.sidebar.image("bazil-dot-studio.png", use_container_width=True)
+    
+    # Add contact developer link
+    st.sidebar.markdown("""
+        <div style="text-align: center; margin-top: 0px; margin-bottom: 10px;">
+            <a href="http://bazil.contact" target="_blank" style="color: #666; text-decoration: none; font-size: 0.8rem;">
+                Contact Developer
+            </a>
+        </div>
+    """, unsafe_allow_html=True)
 
     # Add language selector at the very bottom
     st.sidebar.markdown("---")  # Add a divider
