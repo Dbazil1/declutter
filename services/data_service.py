@@ -136,17 +136,32 @@ def add_item(item_data, image=None):
         # Ensure user_id is included in the item data
         if 'user_id' not in item_data:
             item_data['user_id'] = st.session_state.user.id
+
+        # Add debug output in development mode
+        if is_development:
+            st.write(f"Adding new item: {item_data}")
             
         # First create the item
-        response = st.session_state.supabase.table('items')\
-            .insert(item_data)\
-            .execute()
-        
-        if not response.data:
-            st.error("Failed to create item. Please check your permissions.")
-            return None
+        try:
+            response = st.session_state.supabase.table('items')\
+                .insert(item_data)\
+                .execute()
             
-        item = response.data[0]
+            if is_development:
+                st.write(f"Insert response: {response}")
+                
+            if not response.data:
+                st.error("Failed to create item. Please check your permissions.")
+                return None
+                
+            item = response.data[0]
+        except Exception as insert_error:
+            st.error(f"Database insert error: {str(insert_error)}")
+            if hasattr(insert_error, 'json'):
+                error_data = insert_error.json()
+                st.error(f"API error details: {error_data}")
+            st.error(traceback.format_exc())
+            return None
         
         # If there's an image, upload it
         if image:
@@ -154,39 +169,54 @@ def add_item(item_data, image=None):
             file_extension = image.name.split('.')[-1]
             filename = f"{item['id']}/{uuid.uuid4()}.{file_extension}"
             
-            # Upload the image to Supabase Storage
-            storage_response = st.session_state.supabase.storage\
-                .from_('item-images')\
-                .upload(filename, image.getvalue(), {
-                    'content-type': f'image/{file_extension}'
-                })
-            
-            # Get the public URL of the uploaded image
-            image_url = st.session_state.supabase.storage\
-                .from_('item-images')\
-                .get_public_url(filename)
-            
-            # Add the image reference to the item_images table
-            st.session_state.supabase.table('item_images')\
-                .insert({
-                    'item_id': item['id'],
-                    'image_url': image_url,
-                    'is_primary': True
-                })\
-                .execute()
-            
-            # Generate and store sales photos
-            generate_and_store_sales_photos(
-                st.session_state.supabase,
-                item['id'], 
-                image_url, 
-                item_data['price_usd'], 
-                item_data['price_local'], 
-                item_data['name']
-            )
-            
-            # Update the item with the image URL
-            item['image_url'] = image_url
+            try:
+                # Upload the image to Supabase Storage
+                storage_response = st.session_state.supabase.storage\
+                    .from_('item-images')\
+                    .upload(filename, image.getvalue(), {
+                        'content-type': f'image/{file_extension}'
+                    })
+                
+                # Get the public URL of the uploaded image
+                image_url = st.session_state.supabase.storage\
+                    .from_('item-images')\
+                    .get_public_url(filename)
+                
+                # Add the image reference to the item_images table
+                img_response = st.session_state.supabase.table('item_images')\
+                    .insert({
+                        'item_id': item['id'],
+                        'image_url': image_url,
+                        'is_primary': True
+                    })\
+                    .execute()
+                    
+                if is_development and not img_response.data:
+                    st.warning("Image was uploaded but database reference was not created")
+                
+                # Generate and store sales photos
+                generate_and_store_sales_photos(
+                    st.session_state.supabase,
+                    item['id'], 
+                    image_url, 
+                    item_data['price_usd'], 
+                    item_data['price_local'], 
+                    item_data['name']
+                )
+                
+                # Update the item with the image URL
+                item['image_url'] = image_url
+            except Exception as image_error:
+                st.error(f"Image upload error: {str(image_error)}")
+                if hasattr(image_error, 'json'):
+                    error_data = image_error.json()
+                    st.error(f"API error details: {error_data}")
+                st.error(traceback.format_exc())
+                # Continue execution - we'll return the item even if image upload fails
+                
+        # Debug confirmation in development mode
+        if is_development:
+            st.write(f"Item added successfully: {item}")
             
         return item
     except Exception as e:
@@ -215,20 +245,39 @@ def update_item(item_id, item_data, image=None):
             .execute()
         
         if not current_item.data:
+            st.error(f"Error: Could not find item with ID {item_id}")
             return None
             
         current_item = current_item.data[0]
         
-        # Update the item
-        response = st.session_state.supabase.table('items')\
-            .update(item_data)\
-            .eq('id', item_id)\
-            .execute()
+        # Add debug output in development mode
+        if is_development:
+            st.write(f"Updating item: {item_id}")
+            st.write(f"Current data: {current_item}")
+            st.write(f"New data: {item_data}")
         
-        if not response.data:
-            return None
+        # Update the item
+        try:
+            response = st.session_state.supabase.table('items')\
+                .update(item_data)\
+                .eq('id', item_id)\
+                .execute()
+                
+            if is_development:
+                st.write(f"Update response: {response}")
             
-        item = response.data[0]
+            if not response.data:
+                st.error("Error: Item update query returned no data")
+                return None
+                
+            item = response.data[0]
+        except Exception as update_error:
+            st.error(f"Database update error: {str(update_error)}")
+            if hasattr(update_error, 'json'):
+                error_data = update_error.json()
+                st.error(f"API error details: {error_data}")
+            st.error(traceback.format_exc())
+            return None
         
         # Check if we need to regenerate photos
         should_regenerate = (
@@ -300,8 +349,12 @@ def update_item(item_id, item_data, image=None):
                 item_data['name']
             )
         
-        # Clear all caches
+        # Clear all caches to ensure fresh data
         st.cache_data.clear()
+        
+        # Debug confirmation in development mode
+        if is_development:
+            st.write(f"Item updated successfully: {item}")
         
         return item
     except Exception as e:
