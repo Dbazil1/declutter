@@ -51,6 +51,9 @@ if 'postgrest_client' not in st.session_state:
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'available'
 
+if 'auth_state' not in st.session_state:
+    st.session_state.auth_state = None
+
 # Initialize language
 if 'language' not in st.session_state:
     st.session_state.language = 'en'
@@ -67,15 +70,18 @@ if 'base_url' not in st.session_state:
 # Check query parameters for public link code
 public_link_code = st.query_params.get("code", None)
 
+# Handle authentication state
+st.session_state.auth_state = handle_auth_state()
+
 # Handle public page route if code is provided
 if public_link_code:
     render_public_page(public_link_code)
+elif st.session_state.auth_state != "authenticated" or not st.session_state.user:
+    # Show login UI if not authenticated or user object is missing
+    render_login_ui()
 else:
-    # Regular app flow
-    if st.session_state.user is None:
-        # Show login UI
-        render_login_ui()
-    else:
+    # User is authenticated, proceed with the main app
+    try:
         # Get user's first name from the database
         try:
             user_info = st.session_state.supabase.table('users')\
@@ -93,7 +99,6 @@ else:
             # If there's an error getting user info, use a default name
             if is_development:
                 st.error(f"Error getting user info: {str(e)}")
-                import traceback
                 st.error(traceback.format_exc())
             first_name = 'User'
         
@@ -110,77 +115,38 @@ else:
         except Exception as e:
             if is_development:
                 st.error(f"Error loading items: {str(e)}")
-                import traceback
                 st.error(traceback.format_exc())
             items = []
             st.warning("Could not load your items. Please try refreshing the page.")
 
-        # Main content with error handling for each page
-        try:
-            if st.session_state.current_page in ['all', 'available', 'paid_ready', 'claimed', 'complete', 'sold_to']:
-                render_items_page(st.session_state.current_page, items, first_name)
-            elif st.session_state.current_page == 'add':
-                render_add_item_form(rerun_callback=st.rerun)
-            elif st.session_state.current_page == 'photos':
-                render_photos_page(items)
-            elif st.session_state.current_page == 'public_links':
-                render_public_links_page()
-            elif st.session_state.current_page == 'settings':
-                render_settings_page()
-        except Exception as page_error:
-            st.error("An error occurred while loading this page. Please try again or contact support.")
-            if is_development:
-                st.error(f"Page error: {str(page_error)}")
-                import traceback
-                st.error(traceback.format_exc())
+        # Main content rendering based on current_page
+        if st.session_state.current_page == 'home':
+             render_home_page() # Added home page rendering
+        elif st.session_state.current_page in ['all', 'available', 'paid_ready', 'claimed', 'complete', 'sold_to']:
+            render_items_page(st.session_state.current_page, items, first_name)
+        elif st.session_state.current_page == 'add':
+            render_add_item_form(rerun_callback=st.rerun)
+        elif st.session_state.current_page == 'photos':
+            render_photos_page(items)
+        elif st.session_state.current_page == 'public_links':
+            render_public_links_page()
+        elif st.session_state.current_page == 'settings':
+            render_settings_page()
+        else:
+            # Default to available items page if current_page is unknown
+            st.session_state.current_page = 'available'
+            render_items_page(st.session_state.current_page, items, first_name)
+
+    except Exception as e:
+        st.error("An error occurred while loading the application. Please try again or contact support.")
+        if is_development:
+            st.error(f"Main App Error: {str(e)}")
+            st.error(traceback.format_exc())
 
 # Debug output in development mode
 if is_development:
-    st.write("Debug: Session state initialized")
-    st.write(f"Debug: Current page: {st.session_state.current_page}")
-    st.write(f"Debug: User: {st.session_state.user}")
-    st.write(f"Debug: Auth state: {st.session_state.auth_state}")
-
-# Main app logic
-try:
-    # Handle authentication state
-    auth_state = handle_auth_state()
-    
-    if is_development:
-        st.write(f"Debug: Auth state after handling: {auth_state}")
-    
-    if auth_state == "needs_login":
-        st.session_state.current_page = 'home'
-    elif auth_state == "authenticated":
-        # Only proceed if we have a valid user
-        if st.session_state.user and hasattr(st.session_state.user, 'id'):
-            if is_development:
-                st.write(f"Debug: User authenticated: {st.session_state.user.email}")
-            
-            # Render the appropriate page based on session state
-            if st.session_state.current_page == 'home':
-                render_home_page()
-            elif st.session_state.current_page == 'settings':
-                render_settings_page()
-            elif st.session_state.current_page == 'public_links':
-                render_public_links_page()
-            else:
-                render_home_page()
-        else:
-            if is_development:
-                st.write("Debug: User object is invalid or missing ID")
-            st.error("Authentication error. Please try logging in again.")
-            st.session_state.current_page = 'home'
-            render_home_page()
-    else:
-        if is_development:
-            st.write("Debug: Auth state is None or invalid")
-        st.error("Authentication error. Please try logging in again.")
-        st.session_state.current_page = 'home'
-        render_home_page()
-
-except Exception as e:
-    if is_development:
-        st.error(f"Error in main app: {str(e)}")
-        st.error(traceback.format_exc())
-    st.error("An error occurred. Please try again or contact support.")
+    st.write("--- Debug Information ---")
+    st.write(f"Current Page: {st.session_state.current_page}")
+    st.write(f"Auth State: {st.session_state.auth_state}")
+    st.write(f"User Object: {st.session_state.user}")
+    st.write("--- End Debug Information ---")
