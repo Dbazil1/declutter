@@ -487,7 +487,12 @@ def render_login_ui():
                     debug_env()
                     # Check if supabase client is initialized properly before accessing auth.url
                     if 'supabase' in st.session_state and st.session_state.supabase and hasattr(st.session_state.supabase, 'auth'):
-                        st.write("Supabase client initialized with:", st.session_state.supabase.auth.url)
+                        try:
+                            # Safely check the URL from the supabase client
+                            st.write("Supabase connection status:", "Active" if st.session_state.supabase else "Not connected")
+                            st.write("Supabase URL:", os.getenv("SUPABASE_URL", "Not set"))
+                        except Exception as e:
+                            st.error(f"Error accessing Supabase client: {str(e)}")
                     else:
                         st.error("Supabase client not properly initialized.")
         
