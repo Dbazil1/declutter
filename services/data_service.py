@@ -133,12 +133,17 @@ def add_item(item_data, image=None):
             st.error("User not authenticated")
             return None
             
+        # Ensure user_id is included in the item data
+        if 'user_id' not in item_data:
+            item_data['user_id'] = st.session_state.user.id
+            
         # First create the item
         response = st.session_state.supabase.table('items')\
             .insert(item_data)\
             .execute()
         
         if not response.data:
+            st.error("Failed to create item. Please check your permissions.")
             return None
             
         item = response.data[0]
@@ -186,6 +191,12 @@ def add_item(item_data, image=None):
         return item
     except Exception as e:
         st.error(f"Error adding item: {str(e)}")
+        if hasattr(e, 'json'):
+            error_data = e.json()
+            if error_data.get('code') == '42501':
+                st.error("Permission denied. Please ensure you have the correct permissions to add items.")
+            elif error_data.get('message'):
+                st.error(f"Database error: {error_data['message']}")
         st.error(traceback.format_exc())
         return None
 
