@@ -302,6 +302,10 @@ def restore_auth_from_cookies():
         refresh_token = st.session_state.get('refresh_token')
         
         if auth_token and refresh_token:
+            # Debug output in development mode
+            if os.getenv('ENVIRONMENT') == 'development':
+                st.write("Found auth tokens in session state, attempting to restore session")
+            
             # Try to restore the session using the tokens
             try:
                 # Set token manually
@@ -311,14 +315,55 @@ def restore_auth_from_cookies():
                 user_response = st.session_state.supabase.auth.get_user()
                 if user_response and user_response.user:
                     st.session_state.user = user_response.user
-                    return True
+                    
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.write(f"Session restored for user: {user_response.user.email}")
+                    
+                    # Test a simple query to verify the token works
+                    try:
+                        test_query = st.session_state.supabase.table('users').select('id').limit(1).execute()
+                        if test_query.data:
+                            if os.getenv('ENVIRONMENT') == 'development':
+                                st.write("Database access verified with current token")
+                            return True
+                        else:
+                            if os.getenv('ENVIRONMENT') == 'development':
+                                st.warning("Database access test returned no data, attempting to refresh token")
+                            # Try to refresh the token
+                            st.session_state.supabase.auth.refresh_session()
+                            return True
+                    except Exception as query_error:
+                        if os.getenv('ENVIRONMENT') == 'development':
+                            st.error(f"Database access test failed: {str(query_error)}")
+                        # Token may be expired, try to refresh
+                        try:
+                            st.session_state.supabase.auth.refresh_session()
+                            if os.getenv('ENVIRONMENT') == 'development':
+                                st.success("Token refreshed successfully")
+                            return True
+                        except:
+                            if os.getenv('ENVIRONMENT') == 'development':
+                                st.error("Token refresh failed, clearing session")
+                            clear_auth_cookies()
+                            st.session_state.user = None
+                else:
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.warning("Failed to get user from session, clearing auth cookies")
+                    clear_auth_cookies()
+                    st.session_state.user = None
             except Exception as session_error:
                 # Token may be expired or invalid, clear cookies
+                if os.getenv('ENVIRONMENT') == 'development':
+                    st.error(f"Error restoring session: {str(session_error)}")
                 clear_auth_cookies()
                 st.session_state.user = None
         
         return False
     except Exception as e:
         # If there's any error, ensure we're in a logged-out state
+        if os.getenv('ENVIRONMENT') == 'development':
+            st.error(f"Unexpected error in restore_auth_from_cookies: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
         st.session_state.user = None
         return False 

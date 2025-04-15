@@ -1,4 +1,6 @@
 import streamlit as st
+import os
+import traceback
 from services.data_service import get_user_public_links, create_public_link, update_public_link, delete_public_link
 from utils.translation_utils import t
 
@@ -9,16 +11,34 @@ def render_public_links_page():
     # Get the base URL for public links
     base_url = st.session_state.get('base_url', 'http://localhost:8501')
     
-    # Get user's first name 
-    user_info = st.session_state.supabase.table('users')\
-        .select('first_name')\
-        .eq('id', st.session_state.user.id)\
-        .execute()
+    # Get user's first name with proper error handling
+    try:
+        user_info = st.session_state.supabase.table('users')\
+            .select('first_name')\
+            .eq('id', st.session_state.user.id)\
+            .execute()
+        
+        first_name = 'User'  # Default value
+        if user_info and hasattr(user_info, 'data') and user_info.data:
+            first_name = user_info.data[0].get('first_name', 'User')
+    except Exception as e:
+        if os.getenv('ENVIRONMENT') == 'development':
+            st.error(f"Error getting user info: {str(e)}")
+            st.error(traceback.format_exc())
+        first_name = 'User'
     
-    first_name = user_info.data[0]['first_name'] if user_info.data else 'User'
-    
-    # Get existing public links
-    public_links = get_user_public_links()
+    # Get existing public links with error handling
+    try:
+        public_links = get_user_public_links()
+        
+        if os.getenv('ENVIRONMENT') == 'development':
+            st.write(f"Found {len(public_links)} public links")
+    except Exception as e:
+        if os.getenv('ENVIRONMENT') == 'development':
+            st.error(f"Error fetching public links: {str(e)}")
+            st.error(traceback.format_exc())
+        public_links = []
+        st.warning("Could not load your public links. Please try refreshing the page.")
     
     # Check if the user already has a public link
     if not public_links:
@@ -28,11 +48,17 @@ def render_public_links_page():
         # Create a simple button to generate a link
         if st.button("Create Public Link", use_container_width=True):
             # Create a link with the user's name
-            link_name = f"{first_name}'s Items for Sale"
-            new_link = create_public_link(link_name)
-            if new_link:
-                st.success("Your public link has been created!")
-                st.rerun()
+            try:
+                link_name = f"{first_name}'s Items for Sale"
+                new_link = create_public_link(link_name)
+                if new_link:
+                    st.success("Your public link has been created!")
+                    st.rerun()
+            except Exception as e:
+                if os.getenv('ENVIRONMENT') == 'development':
+                    st.error(f"Error creating public link: {str(e)}")
+                    st.error(traceback.format_exc())
+                st.error("Could not create public link. Please try again.")
     else:
         # User already has at least one link, show the first (or only) one
         link = public_links[0]
@@ -60,9 +86,15 @@ def render_public_links_page():
             
             # If toggle state changed, update the link status
             if new_status != is_active:
-                if update_public_link(link['id'], {'is_active': new_status}):
-                    st.success("Link status updated!")
-                    st.rerun()
+                try:
+                    if update_public_link(link['id'], {'is_active': new_status}):
+                        st.success("Link status updated!")
+                        st.rerun()
+                except Exception as e:
+                    if os.getenv('ENVIRONMENT') == 'development':
+                        st.error(f"Error updating link status: {str(e)}")
+                        st.error(traceback.format_exc())
+                    st.error("Could not update link status. Please try again.")
         
         # Add help text
         st.markdown("---")

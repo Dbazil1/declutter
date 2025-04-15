@@ -69,12 +69,25 @@ else:
         render_login_ui()
     else:
         # Get user's first name from the database
-        user_info = st.session_state.supabase.table('users')\
-            .select('first_name')\
-            .eq('id', st.session_state.user.id)\
-            .execute()
-        
-        first_name = user_info.data[0]['first_name'] if user_info.data else 'User'
+        try:
+            user_info = st.session_state.supabase.table('users')\
+                .select('first_name')\
+                .eq('id', st.session_state.user.id)\
+                .execute()
+            
+            first_name = 'User'  # Default value
+            if user_info and hasattr(user_info, 'data') and user_info.data:
+                first_name = user_info.data[0].get('first_name', 'User')
+                
+            if os.getenv('ENVIRONMENT') == 'development':
+                st.write(f"Current user: {first_name} (ID: {st.session_state.user.id})")
+        except Exception as e:
+            # If there's an error getting user info, use a default name
+            if os.getenv('ENVIRONMENT') == 'development':
+                st.error(f"Error getting user info: {str(e)}")
+                import traceback
+                st.error(traceback.format_exc())
+            first_name = 'User'
         
         # Render sidebar navigation
         render_sidebar_nav(
@@ -84,16 +97,31 @@ else:
         )
 
         # Load items (used by multiple pages)
-        items = load_items()
+        try:
+            items = load_items()
+        except Exception as e:
+            if os.getenv('ENVIRONMENT') == 'development':
+                st.error(f"Error loading items: {str(e)}")
+                import traceback
+                st.error(traceback.format_exc())
+            items = []
+            st.warning("Could not load your items. Please try refreshing the page.")
 
-        # Main content
-        if st.session_state.current_page in ['all', 'available', 'paid_ready', 'claimed', 'complete', 'sold_to']:
-            render_items_page(st.session_state.current_page, items, first_name)
-        elif st.session_state.current_page == 'add':
-            render_add_item_form(rerun_callback=st.rerun)
-        elif st.session_state.current_page == 'photos':
-            render_photos_page(items)
-        elif st.session_state.current_page == 'public_links':
-            render_public_links_page()
-        elif st.session_state.current_page == 'settings':
-            render_settings_page()
+        # Main content with error handling for each page
+        try:
+            if st.session_state.current_page in ['all', 'available', 'paid_ready', 'claimed', 'complete', 'sold_to']:
+                render_items_page(st.session_state.current_page, items, first_name)
+            elif st.session_state.current_page == 'add':
+                render_add_item_form(rerun_callback=st.rerun)
+            elif st.session_state.current_page == 'photos':
+                render_photos_page(items)
+            elif st.session_state.current_page == 'public_links':
+                render_public_links_page()
+            elif st.session_state.current_page == 'settings':
+                render_settings_page()
+        except Exception as page_error:
+            st.error("An error occurred while loading this page. Please try again or contact support.")
+            if os.getenv('ENVIRONMENT') == 'development':
+                st.error(f"Page error: {str(page_error)}")
+                import traceback
+                st.error(traceback.format_exc())

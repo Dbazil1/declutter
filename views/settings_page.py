@@ -1,7 +1,8 @@
 import streamlit as st
-from services.data_service import update_user_whatsapp, get_user_whatsapp_info
+from services.data_service import update_user_whatsapp
 from utils.translation_utils import t
 import re
+import os
 
 def render_settings_page():
     st.title(t("settings"))
@@ -9,11 +10,36 @@ def render_settings_page():
     # Get user info from session
     user = st.session_state.user
     
+    # Debug output in development mode
+    if os.getenv('ENVIRONMENT') == 'development':
+        st.write(f"User ID: {user.id if user else None}")
+        st.write(f"User email: {user.email if user else None}")
+    
     # Get additional user details from the database
-    user_details = st.session_state.supabase.table('users')\
-        .select('first_name, last_name')\
-        .eq('id', user.id)\
-        .execute().data[0] if user else None
+    try:
+        if not user or not hasattr(user, 'id'):
+            st.error("User information is missing or invalid. Please try logging in again.")
+            user_details = {'first_name': '', 'last_name': ''}
+        else:
+            user_response = st.session_state.supabase.table('users')\
+                .select('first_name, last_name, whatsapp_phone, share_whatsapp_for_items')\
+                .eq('id', user.id)\
+                .execute()
+            
+            if os.getenv('ENVIRONMENT') == 'development':
+                st.write(f"User query response: {user_response.data if hasattr(user_response, 'data') else None}")
+            
+            user_details = user_response.data[0] if user_response and user_response.data and len(user_response.data) > 0 else None
+            
+            if not user_details:
+                st.warning("User details could not be found. Some settings may not be available.")
+                user_details = {'first_name': '', 'last_name': ''}
+    except Exception as e:
+        st.error(f"Error loading user details: {str(e)}")
+        import traceback
+        if os.getenv('ENVIRONMENT') == 'development':
+            st.error(traceback.format_exc())
+        user_details = {'first_name': '', 'last_name': ''}
     
     # Display and edit personal information
     st.header(t('personal_info'))
@@ -61,8 +87,9 @@ def render_settings_page():
     # WhatsApp Settings Section
     st.header(t("whatsapp_settings"))
     
-    # Get current WhatsApp information
-    whatsapp_info = get_user_whatsapp_info(st.session_state.user.id)
+    # Use WhatsApp information from the user_details we already fetched
+    whatsapp_phone = user_details.get('whatsapp_phone', '')
+    share_whatsapp = user_details.get('share_whatsapp_for_items', False)
     
     # Display form for updating WhatsApp settings
     with st.form("whatsapp_settings_form"):
@@ -74,8 +101,8 @@ def render_settings_page():
         # Process current phone number if it exists
         current_phone = ""
         
-        if whatsapp_info and whatsapp_info.get('whatsapp_phone'):
-            current_phone = whatsapp_info['whatsapp_phone']
+        if whatsapp_phone:
+            current_phone = whatsapp_phone
             # Ensure it starts with '+'
             if not current_phone.startswith('+'):
                 current_phone = '+' + current_phone
@@ -88,9 +115,9 @@ def render_settings_page():
         )
         
         # Sharing settings
-        share_whatsapp = st.checkbox(
+        share_whatsapp_checkbox = st.checkbox(
             t('enable_whatsapp'),
-            value=whatsapp_info.get('share_whatsapp_for_items', False) if whatsapp_info else False,
+            value=share_whatsapp,
             help=t('whatsapp_explanation')
         )
         
@@ -103,7 +130,7 @@ def render_settings_page():
                 formatted_phone = phone_number.strip().replace("-", "").replace(" ", "")
                 
                 # Update WhatsApp information
-                if update_user_whatsapp(formatted_phone, share_whatsapp):
+                if update_user_whatsapp(formatted_phone, share_whatsapp_checkbox):
                     st.success(t('settings_updated'))
                     st.rerun()
             else:
