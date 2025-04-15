@@ -73,12 +73,20 @@ def login(email: str, password: str):
             # If the user has pending WhatsApp info to update, do it now
             if 'whatsapp_info' in st.session_state:
                 whatsapp_info = st.session_state.whatsapp_info
-                update_user_whatsapp(
+                if os.getenv('ENVIRONMENT') == 'development':
+                    st.write(f"Updating WhatsApp info during login: {whatsapp_info['phone']}")
+                update_result = update_user_whatsapp(
                     whatsapp_info['phone'], 
                     whatsapp_info['share']
                 )
                 # Remove the temporary data
                 del st.session_state.whatsapp_info
+                
+                if os.getenv('ENVIRONMENT') == 'development':
+                    if update_result:
+                        st.success("WhatsApp information updated during login")
+                    else:
+                        st.error("Failed to update WhatsApp information during login")
             
             st.session_state.current_page = "all"  # Redirect to all items page after login
             st.success("Login successful!")
@@ -132,6 +140,9 @@ def signup(email: str, password: str, first_name: str, last_name: str):
             whatsapp_phone = st.session_state.whatsapp_info.get('phone')
             share_whatsapp = st.session_state.whatsapp_info.get('share', False)
             
+            if os.getenv('ENVIRONMENT') == 'development':
+                st.write(f"WhatsApp info in session: {whatsapp_phone}, Share: {share_whatsapp}")
+            
         st.write("Attempting to sign up...")
         
         try:
@@ -153,6 +164,10 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                     st.write(f"Auth user ID: {auth.user.id}")
                     st.write(f"Auth user email from response: {auth.user.email}")
                     st.write(f"Auth user metadata: {auth.user.user_metadata}")
+                
+                # Store user temporarily in session state to allow direct WhatsApp update
+                temp_user = st.session_state.user
+                st.session_state.user = auth.user
                 
                 # Check if the user already has been added to the public.users table
                 # This might happen automatically via database trigger
@@ -209,20 +224,18 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                             raise
                 else:
                     # User was created by trigger, but may not have WhatsApp info
-                    if whatsapp_phone and (not user_exists_query.data[0].get('whatsapp_phone') or 
-                                          not user_exists_query.data[0].get('share_whatsapp_for_items')):
-                        try:
-                            # Update the WhatsApp info
-                            st.session_state.supabase.table('users').update({
-                                'whatsapp_phone': whatsapp_phone,
-                                'share_whatsapp_for_items': share_whatsapp
-                            }).eq('id', auth.user.id).execute()
-                            
-                            if os.getenv('ENVIRONMENT') == 'development':
-                                st.success("Updated WhatsApp information")
-                        except Exception as e:
-                            if os.getenv('ENVIRONMENT') == 'development':
-                                st.error(f"Failed to update WhatsApp info: {str(e)}")
+                    if whatsapp_phone:
+                        # Directly update WhatsApp info using the update function
+                        whatsapp_updated = update_user_whatsapp(whatsapp_phone, share_whatsapp)
+                        
+                        if os.getenv('ENVIRONMENT') == 'development':
+                            if whatsapp_updated:
+                                st.success("WhatsApp information updated successfully")
+                            else:
+                                st.error("Failed to update WhatsApp information")
+                
+                # Restore original user (if any)
+                st.session_state.user = temp_user
                 
                 st.success("Account created successfully! Please proceed to login.")
                 return True

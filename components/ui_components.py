@@ -545,6 +545,9 @@ def render_login_ui():
                                 'phone': full_phone,
                                 'share': whatsapp_consent
                             }
+                            # Debug WhatsApp info in development
+                            if os.getenv('ENVIRONMENT') == 'development':
+                                st.write(f"Setting WhatsApp info in session: {full_phone}, Share: {whatsapp_consent}")
                         
                         with st.spinner(t('creating_account')):
                             from services.auth_service import signup
