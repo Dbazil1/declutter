@@ -14,12 +14,14 @@ DROP POLICY IF EXISTS "Users can view all items" ON public.items;
 DROP POLICY IF EXISTS "Users can insert their own items" ON public.items;
 DROP POLICY IF EXISTS "Users can update their own items" ON public.items;
 DROP POLICY IF EXISTS "Users can delete their own items" ON public.items;
+DROP POLICY IF EXISTS "Public can view items for active links" ON public.items;
 
 -- Drop existing policies for item_images table
 DROP POLICY IF EXISTS "Users can view all item images" ON public.item_images;
 DROP POLICY IF EXISTS "Users can insert images for their items" ON public.item_images;
 DROP POLICY IF EXISTS "Users can update images for their items" ON public.item_images;
 DROP POLICY IF EXISTS "Users can delete images for their items" ON public.item_images;
+DROP POLICY IF EXISTS "Public can view item images for active links" ON public.item_images;
 
 -- Drop existing policies for public_links table
 DROP POLICY IF EXISTS "Users can view their own public links" ON public.public_links;
@@ -51,6 +53,16 @@ CREATE POLICY "Users can update their own items" ON public.items
 CREATE POLICY "Users can delete their own items" ON public.items
     FOR DELETE USING (auth.uid() = user_id);
 
+-- Create policy for public access to items for active links
+CREATE POLICY "Public can view items for active links" ON public.items
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.public_links
+            WHERE public_links.user_id = items.user_id
+            AND public_links.is_active = true
+        )
+    );
+
 -- Create policies for item_images table
 CREATE POLICY "Users can view all item images" ON public.item_images
     FOR SELECT USING (true);
@@ -79,6 +91,17 @@ CREATE POLICY "Users can delete images for their items" ON public.item_images
             SELECT 1 FROM public.items
             WHERE items.id = item_images.item_id
             AND items.user_id = auth.uid()
+        )
+    );
+
+-- Create policy for public access to item images for active links
+CREATE POLICY "Public can view item images for active links" ON public.item_images
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.items
+            JOIN public.public_links ON public_links.user_id = items.user_id
+            WHERE items.id = item_images.item_id
+            AND public_links.is_active = true
         )
     );
 
