@@ -2,42 +2,6 @@ import streamlit as st
 import time
 import os
 
-def check_auth_cookies():
-    """Component to check for auth tokens in localStorage and transfer to session state"""
-    auth_check_js = """
-    <script>
-        // Function to check for auth tokens in localStorage and transfer to sessionStorage
-        function checkAndTransferAuthTokens() {
-            const authToken = localStorage.getItem('declutter_auth_token');
-            const refreshToken = localStorage.getItem('declutter_refresh_token');
-            
-            if (authToken && refreshToken) {
-                // Save tokens to session state via a hidden form and submit
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.style.display = 'none';
-                
-                const authInput = document.createElement('input');
-                authInput.name = 'auth_token';
-                authInput.value = authToken;
-                form.appendChild(authInput);
-                
-                const refreshInput = document.createElement('input');
-                refreshInput.name = 'refresh_token';
-                refreshInput.value = refreshToken;
-                form.appendChild(refreshInput);
-                
-                document.body.appendChild(form);
-                form.submit();
-            }
-        }
-        
-        // Run the check when page loads
-        window.addEventListener('load', checkAndTransferAuthTokens);
-    </script>
-    """
-    st.markdown(auth_check_js, unsafe_allow_html=True)
-
 def apply_custom_css():
     # Add custom CSS to make sidebar thinner and fit content
     st.markdown("""

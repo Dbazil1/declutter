@@ -8,7 +8,7 @@ from services.data_service import init_supabase, init_postgrest, load_items
 from services.auth_service import logout, restore_auth_from_cookies
 
 # Import UI components
-from components.ui_components import apply_custom_css, render_sidebar_nav, render_login_ui, check_auth_cookies
+from components.ui_components import apply_custom_css, render_sidebar_nav, render_login_ui
 from components.item_components import render_add_item_form
 
 # Import page renderers
@@ -27,9 +27,6 @@ st.set_page_config(
 
 # Apply custom CSS
 apply_custom_css()
-
-# Check for auth cookies
-check_auth_cookies()
 
 # Initialize session state
 if 'supabase' not in st.session_state:

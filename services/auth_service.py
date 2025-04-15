@@ -150,18 +150,8 @@ def save_auth_to_cookie(session):
         # Store the access token and refresh token in session state for persistence
         st.session_state['auth_token'] = session.access_token
         st.session_state['refresh_token'] = session.refresh_token
-        
-        # Use JavaScript to store tokens in browser's localStorage
-        js_code = f"""
-        <script>
-            localStorage.setItem('declutter_auth_token', '{session.access_token}');
-            localStorage.setItem('declutter_refresh_token', '{session.refresh_token}');
-            localStorage.setItem('declutter_expires_at', '{session.expires_at}');
-        </script>
-        """
-        st.markdown(js_code, unsafe_allow_html=True)
     except Exception as e:
-        st.error(f"Error saving auth to cookie: {str(e)}")
+        st.error(f"Error saving auth to session state: {str(e)}")
 
 # Function to clear authentication cookies
 def clear_auth_cookies():
@@ -171,54 +161,12 @@ def clear_auth_cookies():
             del st.session_state['auth_token']
         if 'refresh_token' in st.session_state:
             del st.session_state['refresh_token']
-        
-        # Use JavaScript to clear localStorage
-        js_code = """
-        <script>
-            localStorage.removeItem('declutter_auth_token');
-            localStorage.removeItem('declutter_refresh_token');
-            localStorage.removeItem('declutter_expires_at');
-        </script>
-        """
-        st.markdown(js_code, unsafe_allow_html=True)
     except Exception as e:
-        st.error(f"Error clearing auth cookies: {str(e)}")
+        st.error(f"Error clearing auth from session state: {str(e)}")
 
 # Function to check for existing auth in cookies and restore session
 def restore_auth_from_cookies():
     try:
-        # Create JavaScript to check localStorage and set values in sessionStorage that we can access
-        js_code = """
-        <script>
-            // Check if tokens exist in localStorage
-            const authToken = localStorage.getItem('declutter_auth_token');
-            const refreshToken = localStorage.getItem('declutter_refresh_token');
-            
-            if (authToken && refreshToken) {
-                // Store in sessionStorage so our Python code can access it
-                sessionStorage.setItem('declutter_auth_token', authToken);
-                sessionStorage.setItem('declutter_refresh_token', refreshToken);
-                
-                // Add a hidden element with the token that we can query
-                const tokenEl = document.createElement('div');
-                tokenEl.id = 'auth-token-element';
-                tokenEl.style.display = 'none';
-                tokenEl.innerText = authToken;
-                document.body.appendChild(tokenEl);
-                
-                // Force a reload to ensure our Python code can access the sessionStorage
-                if (!document.getElementById('auth-token-set')) {
-                    const marker = document.createElement('div');
-                    marker.id = 'auth-token-set';
-                    marker.style.display = 'none';
-                    document.body.appendChild(marker);
-                    setTimeout(() => { window.location.reload(); }, 100);
-                }
-            }
-        </script>
-        """
-        st.markdown(js_code, unsafe_allow_html=True)
-        
         # Check session state for tokens (these would have been saved in previous runs)
         auth_token = st.session_state.get('auth_token')
         refresh_token = st.session_state.get('refresh_token')
