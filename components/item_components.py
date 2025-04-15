@@ -63,25 +63,35 @@ def render_edit_modal(rerun_callback=None):
             with col1:
                 submit = st.form_submit_button(t('save_changes'))
                 if submit:
-                    item_data = {
-                        "name": name,
-                        "price_usd": int(price_usd) if price_usd > 0 else None,
-                        "price_local": int(price_local) if price_local > 0 else None,
-                        "sale_status": selected_status,
-                        "is_sold": selected_status == 'paid_picked_up',
-                        "user_id": st.session_state.user.id
-                    }
-                    if selected_status != 'available' and sold_to:
-                        item_data['sold_to'] = sold_to
-                    updated_item = update_item(item['id'], item_data, image)
-                    if updated_item:
-                        st.success(t('item_updated'))
-                        st.session_state.show_edit_modal = False
-                        st.session_state.editing_item = None
-                        # Clear the cache to force reload of items
-                        st.cache_data.clear()
-                        if rerun_callback:
-                            rerun_callback()
+                    # Validate form
+                    if not name:
+                        st.error("Item name is required")
+                    elif price_usd <= 0 and price_local <= 0:
+                        st.error("Please enter at least one price (USD or Local)")
+                    else:
+                        item_data = {
+                            "name": name,
+                            "price_usd": int(price_usd) if price_usd > 0 else None,
+                            "price_local": int(price_local) if price_local > 0 else None,
+                            "sale_status": selected_status,
+                            "is_sold": selected_status == 'paid_picked_up',
+                            "user_id": st.session_state.user.id
+                        }
+                        if selected_status != 'available' and sold_to:
+                            item_data['sold_to'] = sold_to
+                        elif 'sold_to' in item_data:
+                            # Remove sold_to field if not applicable
+                            item_data['sold_to'] = None
+                            
+                        updated_item = update_item(item['id'], item_data, image)
+                        if updated_item:
+                            st.success(t('item_updated'))
+                            st.session_state.show_edit_modal = False
+                            st.session_state.editing_item = None
+                            # Clear the cache to force reload of items
+                            st.cache_data.clear()
+                            if rerun_callback:
+                                rerun_callback()
             with col2:
                 if st.form_submit_button(t('cancel')):
                     st.session_state.show_edit_modal = False
@@ -211,6 +221,11 @@ def render_add_item_form(rerun_callback=None):
             if not name:
                 st.error(t('fill_required_fields'))
             else:
+                # Ensure at least one price is set
+                if price_usd <= 0 and price_local <= 0:
+                    st.error("Please enter at least one price (USD or Local)")
+                    return
+                    
                 item_data = {
                     "name": name,
                     "price_usd": int(price_usd) if price_usd > 0 else None,
@@ -219,11 +234,6 @@ def render_add_item_form(rerun_callback=None):
                     "sale_status": selected_status,
                     "is_sold": selected_status == 'paid_picked_up'
                 }
-                
-                # Ensure at least one price is set
-                if price_usd <= 0 and price_local <= 0:
-                    st.error("Please enter at least one price (USD or Local)")
-                    return
                 
                 if selected_status != 'available' and sold_to:
                     item_data['sold_to'] = sold_to

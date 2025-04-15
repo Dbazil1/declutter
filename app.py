@@ -114,6 +114,10 @@ if 'postgrest_client' not in st.session_state:
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'available'
 
+# Initialize auth state
+if 'auth_state' not in st.session_state:
+    st.session_state.auth_state = None
+
 # Initialize language
 if 'language' not in st.session_state:
     st.session_state.language = 'en'

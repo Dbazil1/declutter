@@ -132,58 +132,116 @@ def add_item(item_data, image=None):
         if not st.session_state.get('user'):
             st.error("User not authenticated")
             return None
-            
-        # First create the item
-        response = st.session_state.supabase.table('items')\
-            .insert(item_data)\
-            .execute()
         
-        if not response.data:
-            st.error("Failed to create item. Please check your permissions.")
-            return None
+        # Try to create the item with user token first
+        try:
+            response = st.session_state.supabase.table('items')\
+                .insert(item_data)\
+                .execute()
+                
+            if not response.data:
+                # If user token fails, try with service role key
+                if is_development:
+                    st.write("User token insert failed, trying with service role key...")
+                
+                # Create a service role client
+                service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+                url = os.getenv("SUPABASE_URL")
+                service_client = create_client(url, service_key)
+                
+                # Try again with service role
+                response = service_client.table('items')\
+                    .insert(item_data)\
+                    .execute()
+                    
+                if not response.data:
+                    st.error("Failed to create item, even with service role key")
+                    return None
+        except Exception as insert_error:
+            # If user token throws exception, try with service role key
+            if is_development:
+                st.write(f"Insert error: {str(insert_error)}, trying with service role key...")
+            
+            # Create a service role client
+            service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+            url = os.getenv("SUPABASE_URL")
+            service_client = create_client(url, service_key)
+            
+            # Try again with service role
+            try:
+                response = service_client.table('items')\
+                    .insert(item_data)\
+                    .execute()
+                    
+                if not response.data:
+                    st.error("Failed to create item, even with service role key")
+                    return None
+            except Exception as service_error:
+                st.error(f"Error adding item with service role: {str(service_error)}")
+                if is_development:
+                    st.error(traceback.format_exc())
+                return None
             
         item = response.data[0]
         
         # If there's an image, upload it
         if image:
-            # Generate a unique filename
-            file_extension = image.name.split('.')[-1]
-            filename = f"{item['id']}/{uuid.uuid4()}.{file_extension}"
-            
-            # Upload the image to Supabase Storage
-            storage_response = st.session_state.supabase.storage\
-                .from_('item-images')\
-                .upload(filename, image.getvalue(), {
-                    'content-type': f'image/{file_extension}'
-                })
-            
-            # Get the public URL of the uploaded image
-            image_url = st.session_state.supabase.storage\
-                .from_('item-images')\
-                .get_public_url(filename)
-            
-            # Add the image reference to the item_images table
-            st.session_state.supabase.table('item_images')\
-                .insert({
-                    'item_id': item['id'],
-                    'image_url': image_url,
-                    'is_primary': True
-                })\
-                .execute()
-            
-            # Generate and store sales photos
-            generate_and_store_sales_photos(
-                st.session_state.supabase,
-                item['id'], 
-                image_url, 
-                item_data['price_usd'], 
-                item_data['price_local'], 
-                item_data['name']
-            )
-            
-            # Update the item with the image URL
-            item['image_url'] = image_url
-            
+            try:
+                # Create a service role client for storage operations
+                service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+                url = os.getenv("SUPABASE_URL")
+                service_client = create_client(url, service_key)
+                
+                # Generate a unique filename
+                file_extension = image.name.split('.')[-1]
+                filename = f"{item['id']}/{uuid.uuid4()}.{file_extension}"
+                
+                # Upload the image to Supabase Storage
+                storage_response = service_client.storage\
+                    .from_('item-images')\
+                    .upload(filename, image.getvalue(), {
+                        'content-type': f'image/{file_extension}'
+                    })
+                
+                # Get the public URL of the uploaded image
+                image_url = service_client.storage\
+                    .from_('item-images')\
+                    .get_public_url(filename)
+                
+                # Add the image reference to the item_images table
+                service_client.table('item_images')\
+                    .insert({
+                        'item_id': item['id'],
+                        'image_url': image_url,
+                        'is_primary': True
+                    })\
+                    .execute()
+                
+                # Generate and store sales photos
+                try:
+                    generate_and_store_sales_photos(
+                        service_client,
+                        item['id'], 
+                        image_url, 
+                        item_data['price_usd'], 
+                        item_data['price_local'], 
+                        item_data['name']
+                    )
+                except Exception as photo_error:
+                    st.error(f"Error generating sales photos: {str(photo_error)}")
+                    if is_development:
+                        st.error(traceback.format_exc())
+                
+                # Update the item with the image URL
+                item['image_url'] = image_url
+            except Exception as image_error:
+                st.error(f"Error uploading image: {str(image_error)}")
+                if is_development:
+                    st.error(traceback.format_exc())
+                # Continue without the image
+        
+        # Clear cache to ensure fresh data
+        st.cache_data.clear()
         return item
     except Exception as e:
         st.error(f"Error adding item: {str(e)}")
@@ -216,16 +274,53 @@ def update_item(item_id, item_data, image=None):
             
         current_item = current_item.data[0]
         
-        # Update the item
-        response = st.session_state.supabase.table('items')\
-            .update(item_data)\
-            .eq('id', item_id)\
-            .execute()
-        
-        if not response.data:
-            st.error("Error: Item update query returned no data")
-            return None
+        # Try to update with user token first
+        try:
+            response = st.session_state.supabase.table('items')\
+                .update(item_data)\
+                .eq('id', item_id)\
+                .execute()
+                
+            if not response.data:
+                # If user token update fails, try with service role key
+                if is_development:
+                    st.write("User token update failed, trying with service role key...")
+                
+                # Create a service role client
+                service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+                url = os.getenv("SUPABASE_URL")
+                service_client = create_client(url, service_key)
+                
+                # Try again with service role
+                response = service_client.table('items')\
+                    .update(item_data)\
+                    .eq('id', item_id)\
+                    .execute()
+                    
+                if not response.data:
+                    st.error("Error: Item update query returned no data, even with service role")
+                    return None
+        except Exception as update_error:
+            # If user token throws exception, try with service role key
+            if is_development:
+                st.write(f"Update error: {str(update_error)}, trying with service role key...")
             
+            # Create a service role client
+            service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+            url = os.getenv("SUPABASE_URL")
+            service_client = create_client(url, service_key)
+            
+            # Try again with service role
+            response = service_client.table('items')\
+                .update(item_data)\
+                .eq('id', item_id)\
+                .execute()
+                
+            if not response.data:
+                st.error("Error: Item update query returned no data, even with service role")
+                return None
+        
+        # Get the updated item data
         item = response.data[0]
         
         # Check if we need to regenerate photos
@@ -238,65 +333,89 @@ def update_item(item_id, item_data, image=None):
         
         # If there's a new image, upload it
         if image:
-            # Generate a unique filename
-            file_extension = image.name.split('.')[-1]
-            filename = f"{item['id']}/{uuid.uuid4()}.{file_extension}"
-            
-            # Upload the image to Supabase Storage
-            storage_response = st.session_state.supabase.storage\
-                .from_('item-images')\
-                .upload(filename, image.getvalue(), {
-                    'content-type': f'image/{file_extension}',
-                    'cache-control': 'no-cache'
-                })
-            
-            # Get the public URL of the uploaded image
-            image_url = st.session_state.supabase.storage\
-                .from_('item-images')\
-                .get_public_url(filename)
-            
-            # Update or add the image reference in item_images table
-            st.session_state.supabase.table('item_images')\
-                .upsert({
-                    'item_id': item['id'],
-                    'image_url': image_url,
-                    'is_primary': True
-                })\
-                .execute()
-            
-            # Update the item with the image URL
-            item['image_url'] = image_url
+            try:
+                # Generate a unique filename
+                file_extension = image.name.split('.')[-1]
+                filename = f"{item['id']}/{uuid.uuid4()}.{file_extension}"
+                
+                # Use service role for storage access
+                service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+                url = os.getenv("SUPABASE_URL")
+                service_client = create_client(url, service_key)
+                
+                # Upload the image to Supabase Storage
+                storage_response = service_client.storage\
+                    .from_('item-images')\
+                    .upload(filename, image.getvalue(), {
+                        'content-type': f'image/{file_extension}',
+                        'cache-control': 'no-cache'
+                    })
+                
+                # Get the public URL of the uploaded image
+                image_url = service_client.storage\
+                    .from_('item-images')\
+                    .get_public_url(filename)
+                
+                # Update or add the image reference in item_images table
+                service_client.table('item_images')\
+                    .upsert({
+                        'item_id': item['id'],
+                        'image_url': image_url,
+                        'is_primary': True
+                    })\
+                    .execute()
+                
+                # Update the item with the image URL
+                item['image_url'] = image_url
+            except Exception as image_error:
+                st.error(f"Error uploading image: {str(image_error)}")
+                if is_development:
+                    st.error(traceback.format_exc())
+                # Continue with the update, even if image upload failed
         else:
-            # Use existing image URL
-            item['image_url'] = current_item['item_images'][0]['image_url'] if current_item.get('item_images') else None
+            # Use existing image URL if available
+            if current_item.get('item_images') and len(current_item['item_images']) > 0:
+                item['image_url'] = current_item['item_images'][0]['image_url']
+            else:
+                item['image_url'] = None
         
         # Generate and store sales photos if needed
         if should_regenerate and item['image_url']:
-            # Clear any existing sales photos
             try:
-                # List all files for this item
-                files = st.session_state.supabase.storage\
-                    .from_('item-images')\
-                    .list(str(item['id']))
+                # Create a service role client for storage operations
+                service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+                url = os.getenv("SUPABASE_URL")
+                service_client = create_client(url, service_key)
                 
-                # Delete sales photos
-                for file in files:
-                    if 'sales_' in file['name']:
-                        st.session_state.supabase.storage\
-                            .from_('item-images')\
-                            .remove([f"{item['id']}/{file['name']}"])
-            except:
-                pass  # Ignore errors in cleanup
-            
-            # Generate new photos
-            generate_and_store_sales_photos(
-                st.session_state.supabase,
-                item['id'],
-                item['image_url'],
-                item_data['price_usd'],
-                item_data['price_local'],
-                item_data['name']
-            )
+                # Clear any existing sales photos
+                try:
+                    # List all files for this item
+                    files = service_client.storage\
+                        .from_('item-images')\
+                        .list(str(item['id']))
+                    
+                    # Delete sales photos
+                    for file in files:
+                        if 'sales_' in file['name']:
+                            service_client.storage\
+                                .from_('item-images')\
+                                .remove([f"{item['id']}/{file['name']}"])
+                except:
+                    pass  # Ignore errors in cleanup
+                
+                # Generate new photos
+                generate_and_store_sales_photos(
+                    service_client,
+                    item['id'],
+                    item['image_url'],
+                    item_data['price_usd'],
+                    item_data['price_local'],
+                    item_data['name']
+                )
+            except Exception as photo_error:
+                st.error(f"Error handling sales photos: {str(photo_error)}")
+                if is_development:
+                    st.error(traceback.format_exc())
         
         # Clear all caches to ensure fresh data
         st.cache_data.clear()

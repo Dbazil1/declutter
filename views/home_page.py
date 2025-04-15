@@ -108,7 +108,11 @@ def render_home_page():
                         with col2:
                             st.write(f"**{item.get('name', 'Unnamed Item')}**")
                             st.write(f"Status: {item.get('status', 'Unknown')}")
-                            st.write(f"Price: ${item.get('price_usd', 0):.2f}")
+                            price_usd = item.get('price_usd')
+                            if price_usd is not None:
+                                st.write(f"Price: ${price_usd:.2f}")
+                            else:
+                                st.write("Price: Not set")
             
             else:
                 st.info("No recent activity to show. Add your first item to get started!")

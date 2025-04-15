@@ -30,6 +30,7 @@ def login(email: str, password: str):
                 st.write(f"User metadata: {auth.user.user_metadata}")
             
             st.session_state.user = auth.user
+            st.session_state.auth_state = "authenticated"
             
             # Verify user exists in the users table and create if needed
             user_record = st.session_state.supabase.table('users').select('*').eq('id', auth.user.id).execute()
@@ -266,26 +267,58 @@ def signup(email: str, password: str, first_name: str, last_name: str):
         return False
 
 def logout():
+    """Log the user out and clear auth state"""
     try:
-        st.session_state.supabase.auth.sign_out()
+        if is_development:
+            st.write("Debug: Logging out user")
+            
+        # Sign out via Supabase API
+        if st.session_state.get('supabase'):
+            st.session_state.supabase.auth.sign_out()
+        
+        # Clear session state
         st.session_state.user = None
+        st.session_state.auth_state = "needs_login"
         
         # Clear auth cookies
         clear_auth_cookies()
         
+        if is_development:
+            st.write("Debug: User logged out successfully")
+            
         st.success("Logged out successfully!")
+        
+        # Redirect to home
+        st.session_state.current_page = 'home'
+        
     except Exception as e:
-        st.error(f"Error during logout: {str(e)}")
-        st.error(traceback.format_exc())
+        if is_development:
+            st.error(f"Error during logout: {str(e)}")
+            st.error(traceback.format_exc())
 
 # Function to save authentication info to cookies
 def save_auth_to_cookie(session):
+    """Save authentication data to cookies for persistent login"""
     try:
-        # Store the access token and refresh token in session state for persistence
-        st.session_state['auth_token'] = session.access_token
-        st.session_state['refresh_token'] = session.refresh_token
+        if is_development:
+            st.write("Debug: Saving auth tokens to session state")
+            
+        # Save tokens in session state (these persist between Streamlit reruns)
+        if session and hasattr(session, 'access_token'):
+            st.session_state['auth_token'] = session.access_token
+            st.session_state['refresh_token'] = session.refresh_token
+            
+            if is_development:
+                masked_token = session.access_token[:10] + "..." if session.access_token else "None" 
+                st.write(f"Debug: Saved auth token: {masked_token}")
+                st.write(f"Debug: Saved refresh token: {'Yes' if session.refresh_token else 'No'}")
+        else:
+            if is_development:
+                st.write("Debug: No valid session to save")
     except Exception as e:
-        st.error(f"Error saving auth to session state: {str(e)}")
+        if is_development:
+            st.error(f"Error saving auth to cookies: {str(e)}")
+            st.error(traceback.format_exc())
 
 # Function to clear authentication cookies
 def clear_auth_cookies():
@@ -300,90 +333,121 @@ def clear_auth_cookies():
 
 # Function to check for existing auth in cookies and restore session
 def restore_auth_from_cookies():
+    """Restore authentication data from cookies"""
     try:
-        # Check session state for tokens (these would have been saved in previous runs)
+        if is_development:
+            st.write("Debug: Attempting to restore auth from cookies")
+        
+        # Get tokens from cookies
         auth_token = st.session_state.get('auth_token')
         refresh_token = st.session_state.get('refresh_token')
         
-        if auth_token and refresh_token:
-            # Debug output in development mode
+        if auth_token and refresh_token and st.session_state.get('supabase'):
             if is_development:
-                st.write("Found auth tokens in session state, attempting to restore session")
+                st.write("Debug: Found stored tokens, attempting to restore session")
             
-            # Try to restore the session using the tokens
+            # Try to set the auth and restore the session
             try:
-                # Set token manually
+                # Attempt to use the auth token
                 st.session_state.supabase.auth.set_session(auth_token, refresh_token)
                 
-                # Get the user from the session
-                user_response = st.session_state.supabase.auth.get_user()
-                if user_response and user_response.user:
-                    st.session_state.user = user_response.user
-                    
+                # Verify token by fetching user
+                auth_user = st.session_state.supabase.auth.get_user()
+                
+                if auth_user and hasattr(auth_user, 'user'):
+                    st.session_state.user = auth_user.user
+                    st.session_state.auth_state = "authenticated"
                     if is_development:
-                        st.write(f"Session restored for user: {user_response.user.email}")
-                    
-                    # Test a simple query to verify the token works
-                    try:
-                        test_query = st.session_state.supabase.table('users').select('id').limit(1).execute()
-                        if test_query.data:
-                            if is_development:
-                                st.write("Database access verified with current token")
-                            return True
-                        else:
-                            if is_development:
-                                st.warning("Database access test returned no data, attempting to refresh token")
-                            # Try to refresh the token
-                            st.session_state.supabase.auth.refresh_session()
-                            return True
-                    except Exception as query_error:
-                        if is_development:
-                            st.error(f"Database access test failed: {str(query_error)}")
-                        # Token may be expired, try to refresh
-                        try:
-                            st.session_state.supabase.auth.refresh_session()
-                            if is_development:
-                                st.success("Token refreshed successfully")
-                            return True
-                        except:
-                            if is_development:
-                                st.error("Token refresh failed, clearing session")
-                            clear_auth_cookies()
-                            st.session_state.user = None
+                        st.write(f"Debug: Successfully restored auth for user: {auth_user.user.email}")
+                    return True
                 else:
                     if is_development:
-                        st.warning("Failed to get user from session, clearing auth cookies")
-                    clear_auth_cookies()
-                    st.session_state.user = None
-            except Exception as session_error:
-                # Token may be expired or invalid, clear cookies
+                        st.write("Debug: Failed to restore user from auth token")
+                    
+                    # Try to refresh the token
+                    try:
+                        if is_development:
+                            st.write("Debug: Attempting to refresh token")
+                        new_session = st.session_state.supabase.auth.refresh_session()
+                        if new_session:
+                            st.session_state.user = new_session.user
+                            save_auth_to_cookie(new_session.session)
+                            st.session_state.auth_state = "authenticated"
+                            if is_development:
+                                st.write(f"Debug: Successfully refreshed token for user: {new_session.user.email}")
+                            return True
+                    except Exception as refresh_err:
+                        if is_development:
+                            st.write(f"Debug: Token refresh failed: {str(refresh_err)}")
+                        # Clear invalid auth data
+                        clear_auth_cookies()
+                        st.session_state.auth_state = "needs_login"
+            except Exception as auth_err:
                 if is_development:
-                    st.error(f"Error restoring session: {str(session_error)}")
+                    st.write(f"Debug: Error setting session from tokens: {str(auth_err)}")
+                # Clear the invalid auth data
                 clear_auth_cookies()
-                st.session_state.user = None
-        
+                st.session_state.auth_state = "needs_login"
+        else:
+            if is_development:
+                st.write("Debug: No stored auth tokens found")
+            st.session_state.auth_state = "needs_login"
+            
         return False
     except Exception as e:
-        # If there's any error, ensure we're in a logged-out state
         if is_development:
-            st.error(f"Unexpected error in restore_auth_from_cookies: {str(e)}")
-            import traceback
+            st.error(f"Error restoring auth from cookies: {str(e)}")
             st.error(traceback.format_exc())
-        st.session_state.user = None
-        return False 
+        st.session_state.auth_state = "needs_login"
+        return False
 
 def get_current_user():
-    """Get the current user from the session state."""
+    """Get the current authenticated user"""
     try:
-        if is_development:
-            st.write("Debug: Getting current user from session state")
-        
-        user = st.session_state.get('user')
-        
-        if is_development:
-            st.write(f"Debug: User object: {user}")
-        
-        return user
+        if st.session_state.get('user'):
+            # Verify token validity by making a simple query
+            try:
+                if st.session_state.get('supabase'):
+                    # Test with a simple query to verify token validity
+                    test = st.session_state.supabase.table('users').select('id').limit(1).execute()
+                    if test.data:
+                        # Token is valid
+                        return st.session_state.user
+                    else:
+                        # Token is invalid, try to refresh
+                        if is_development:
+                            st.write("Debug: Token invalid, attempting to refresh")
+                        refresh_token = st.session_state.get('refresh_token')
+                        if refresh_token:
+                            try:
+                                new_session = st.session_state.supabase.auth.refresh_session()
+                                if new_session:
+                                    st.session_state.user = new_session.user
+                                    save_auth_to_cookie(new_session.session)
+                                    if is_development:
+                                        st.write("Debug: Token refreshed successfully")
+                                    return st.session_state.user
+                            except Exception as refresh_error:
+                                if is_development:
+                                    st.write(f"Debug: Token refresh failed: {str(refresh_error)}")
+                                # Clear invalid auth data
+                                st.session_state.user = None
+                                clear_auth_cookies()
+                        else:
+                            # No refresh token, clear invalid auth
+                            st.session_state.user = None
+                            clear_auth_cookies()
+                else:
+                    # No supabase client, can't verify
+                    return st.session_state.user
+            except Exception as token_check_error:
+                if is_development:
+                    st.write(f"Debug: Token check error: {str(token_check_error)}")
+                # Return user anyway but mark auth_state for refresh on next cycle
+                st.session_state.auth_state = "token_error"
+                return st.session_state.user
+                
+        return None
     except Exception as e:
         if is_development:
             st.error(f"Error getting current user: {str(e)}")
@@ -401,6 +465,33 @@ def handle_auth_state():
         
         if is_development:
             st.write(f"Debug: Current auth state: {auth_state}")
+        
+        # If auth_state is token_error, try to refresh
+        if auth_state == "token_error":
+            if is_development:
+                st.write("Debug: Attempting to fix token error")
+            refresh_token = st.session_state.get('refresh_token')
+            if refresh_token and st.session_state.get('supabase'):
+                try:
+                    new_session = st.session_state.supabase.auth.refresh_session()
+                    if new_session:
+                        st.session_state.user = new_session.user
+                        save_auth_to_cookie(new_session.session)
+                        st.session_state.auth_state = "authenticated"
+                        if is_development:
+                            st.write("Debug: Token refreshed successfully")
+                        return "authenticated"
+                except Exception as refresh_error:
+                    if is_development:
+                        st.write(f"Debug: Token refresh failed: {str(refresh_error)}")
+                    st.session_state.user = None
+                    clear_auth_cookies()
+                    st.session_state.auth_state = "needs_login"
+                    return "needs_login"
+            else:
+                # No refresh token or Supabase client, mark as needing login
+                st.session_state.auth_state = "needs_login"
+                return "needs_login"
         
         # If we don't have an auth state, we need to check if the user is logged in
         if auth_state is None:
