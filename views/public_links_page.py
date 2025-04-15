@@ -12,20 +12,120 @@ def render_public_links_page():
     st.title(t('public_links'))
     st.markdown(t('public_links_desc'))
     
-    # Get user info from session
-    user = st.session_state.user
+    # Get all public links for the current user
+    links = get_user_public_links()
     
+    # Create service role client for database operations
+    service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    url = os.getenv('SUPABASE_URL')
+    service_client = create_client(url, service_key)
+    
+    # Create a new public link
+    with st.form("create_link_form"):
+        name = st.text_input(t('link_name'), value="My Items Collection")
+        submit = st.form_submit_button(t('create_new_link'))
+        if submit:
+            link = create_public_link(name)
+            if link:
+                st.success(t('link_created'))
+                st.rerun()  # Refresh the page
+    
+    # Display existing links
+    if not links:
+        st.info(t('no_public_links'))
+        return
+        
+    # Split into active and inactive links
+    active_links = [link for link in links if link.get('is_active')]
+    inactive_links = [link for link in links if not link.get('is_active')]
+    
+    if active_links:
+        st.header(t('active_links'))
+        for link in active_links:
+            with st.container():
+                col1, col2, col3, col4 = st.columns([2, 3, 1, 1])
+                
+                with col1:
+                    st.markdown(f"**{link['name']}**")
+                    
+                with col2:
+                    app_url = st.session_state.base_url
+                    full_link = f"{app_url}?code={link['link_code']}"
+                    st.markdown(f"[{full_link}]({full_link})")
+                    st.caption(f"{t('created')}: {link['created_at'][:10]}")
+                    
+                with col3:
+                    if st.button(t('copy_link'), key=f"copy_{link['id']}"):
+                        # Create a JS command to copy the link
+                        copy_code = f"""
+                        <script>
+                        const el = document.createElement('textarea');
+                        el.value = '{full_link}';
+                        document.body.appendChild(el);
+                        el.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(el);
+                        </script>
+                        """
+                        st.markdown(copy_code, unsafe_allow_html=True)
+                        st.success("Link copied!")
+                    
+                with col4:
+                    if st.button(t('deactivate'), key=f"deactivate_{link['id']}"):
+                        update_public_link(link['id'], {'is_active': False})
+                        st.success(t('link_deactivated'))
+                        st.rerun()
+                
+                st.markdown("---")
+    else:
+        st.info(t('no_active_links'))
+    
+    if inactive_links:
+        st.header(t('inactive_links'))
+        for link in inactive_links:
+            with st.container():
+                col1, col2, col3, col4 = st.columns([2, 3, 1, 1])
+                
+                with col1:
+                    st.markdown(f"**{link['name']}**")
+                    
+                with col2:
+                    st.caption(f"{t('link_code')}: {link['link_code']}")
+                    st.caption(f"{t('created')}: {link['created_at'][:10]}")
+                    
+                with col3:
+                    if st.button(t('activate'), key=f"activate_{link['id']}"):
+                        update_public_link(link['id'], {'is_active': True})
+                        st.success(t('link_activated'))
+                        st.rerun()
+                    
+                with col4:
+                    if st.button(t('delete'), key=f"delete_{link['id']}"):
+                        delete_public_link(link['id'])
+                        st.success(t('link_deleted'))
+                        st.rerun()
+                
+                st.markdown("---")
+    else:
+        st.info(t('no_inactive_links'))
+    
+    # Display user WhatsApp information if available
+    user_info = service_client.table('users')\
+        .select('whatsapp_phone, share_whatsapp_for_items')\
+        .eq('id', st.session_state.user.id)\
+        .execute()
+
     if is_development:
-        st.write(f"User ID: {user.id if user else None}")
-        st.write(f"User email: {user.email if user else None}")
+        st.write(f"User ID: {st.session_state.user.id if st.session_state.user else None}")
+        st.write(f"User email: {st.session_state.user.email if st.session_state.user else None}")
     
     # Get additional user details from the database
     try:
-        if not user or not hasattr(user, 'id'):
+        if not st.session_state.user or not hasattr(st.session_state.user, 'id'):
             st.error("User information is missing or invalid. Please try logging in again.")
             return
         
-        user_details = get_user_details_safely(user.id)
+        user_details = get_user_details_safely(st.session_state.user.id)
         
         if is_development:
             st.write(f"User details retrieved: {user_details}")
@@ -66,9 +166,9 @@ def render_public_links_page():
         if st.button("Create Public Link", use_container_width=True):
             # Create a link with the user's name
             try:
-                user_info = st.session_state.supabase.table('users')\
+                user_info = service_client.table('users')\
                     .select('first_name')\
-                    .eq('id', user.id)\
+                    .eq('id', st.session_state.user.id)\
                     .execute()
                 
                 first_name = 'User'  # Default value

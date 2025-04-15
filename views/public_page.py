@@ -5,6 +5,8 @@ from utils.whatsapp_utils import generate_whatsapp_message_template, create_what
 import base64
 from PIL import Image
 import io
+import os
+from supabase import create_client
 
 def render_public_page(link_code):
     # Custom function to display bilingual text
@@ -36,8 +38,13 @@ def render_public_page(link_code):
     # Load the available items for this link's owner
     items = load_public_items(public_link['user_id'])
     
+    # Create a service role client for database operations
+    service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    url = os.getenv('SUPABASE_URL')
+    service_client = create_client(url, service_key)
+    
     # Get owner info including name
-    owner_info = st.session_state.supabase.table('users')\
+    owner_info = service_client.table('users')\
         .select('first_name, last_name')\
         .eq('id', public_link['user_id'])\
         .execute()
@@ -117,11 +124,26 @@ def render_public_page(link_code):
                 if item.get('category'):
                     st.markdown(f"**{bilingual('category')}:** {item['category']}")
                 
-                # Add WhatsApp contact button if owner has enabled it
-                if (owner_whatsapp and 
-                    owner_whatsapp.get('whatsapp_phone') and 
-                    owner_whatsapp.get('share_whatsapp_for_items')):
-                    
+                # Add WhatsApp CSS first (always add this CSS)
+                st.markdown("""
+                <style>
+                .whatsapp-button {
+                    background-color: #25D366;
+                    color: white;
+                    padding: 10px 15px;
+                    border-radius: 4px;
+                    text-decoration: none;
+                    display: inline-block;
+                    width: 100%;
+                    text-align: center;
+                    font-weight: bold;
+                    margin-top: 10px;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                # Add WhatsApp contact button if owner has WhatsApp
+                if owner_whatsapp and owner_whatsapp.get('whatsapp_phone'):
                     # Generate message template
                     message = generate_whatsapp_message_template(
                         item['name'],
@@ -138,21 +160,4 @@ def render_public_page(link_code):
                     
                     if whatsapp_link:
                         # Display WhatsApp button
-                        st.markdown("""
-                        <style>
-                        .whatsapp-button {
-                            background-color: #25D366;
-                            color: white;
-                            padding: 10px 15px;
-                            border-radius: 4px;
-                            text-decoration: none;
-                            display: inline-block;
-                            width: 100%;
-                            text-align: center;
-                            font-weight: bold;
-                            margin-top: 10px;
-                        }
-                        </style>
-                        """, unsafe_allow_html=True)
-                        
                         st.markdown(f'<a href="{whatsapp_link}" target="_blank" class="whatsapp-button">{bilingual("contact_via_whatsapp")}</a>', unsafe_allow_html=True) 

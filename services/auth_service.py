@@ -18,7 +18,13 @@ def login(email: str, password: str):
             
         st.write("Attempting to sign in...")
         try:
-            auth = st.session_state.supabase.auth.sign_in_with_password({
+            # Create a service role client for auth operations
+            service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+            url = os.getenv('SUPABASE_URL')
+            service_client = create_client(url, service_key)
+            
+            # Use normal auth with the service client
+            auth = service_client.auth.sign_in_with_password({
                 "email": email,
                 "password": password
             })
@@ -33,7 +39,7 @@ def login(email: str, password: str):
             st.session_state.auth_state = "authenticated"
             
             # Verify user exists in the users table and create if needed
-            user_record = st.session_state.supabase.table('users').select('*').eq('id', auth.user.id).execute()
+            user_record = service_client.table('users').select('*').eq('id', auth.user.id).execute()
             
             if not user_record.data:
                 # The user exists in auth.users but not in public.users
@@ -56,7 +62,7 @@ def login(email: str, password: str):
                 }
                 
                 try:
-                    insert_response = st.session_state.supabase.table('users').insert(user_data).execute()
+                    insert_response = service_client.table('users').insert(user_data).execute()
                     if is_development:
                         st.success("User record created in public.users table")
                         st.write(f"Insert response: {insert_response.data if hasattr(insert_response, 'data') else None}")
@@ -151,8 +157,13 @@ def signup(email: str, password: str, first_name: str, last_name: str):
         st.write("Attempting to sign up...")
         
         try:
-            # Create auth user with email and password
-            auth = st.session_state.supabase.auth.sign_up({
+            # Create a service role client for auth operations
+            service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+            url = os.getenv('SUPABASE_URL')
+            service_client = create_client(url, service_key)
+            
+            # Create auth user with email and password using service role
+            auth = service_client.auth.sign_up({
                 "email": email,
                 "password": password,
                 "options": {
@@ -176,7 +187,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                 
                 # Check if the user already has been added to the public.users table
                 # This might happen automatically via database trigger
-                user_exists_query = st.session_state.supabase.table('users').select('*').eq('id', auth.user.id).execute()
+                user_exists_query = service_client.table('users').select('*').eq('id', auth.user.id).execute()
                 
                 # Only create user record if it doesn't already exist
                 if not user_exists_query.data:
@@ -203,7 +214,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                         st.write(user_data)
                     
                     try:
-                        response = st.session_state.supabase.table('users').insert(user_data).execute()
+                        response = service_client.table('users').insert(user_data).execute()
                         
                         # Debug output in development mode
                         if is_development:
@@ -217,7 +228,7 @@ def signup(email: str, password: str, first_name: str, last_name: str):
                             # Try to clean up the auth user since we couldn't create the profile
                             try:
                                 # This might not always work depending on permissions
-                                st.session_state.supabase.auth.admin.delete_user(auth.user.id)
+                                service_client.auth.admin.delete_user(auth.user.id)
                             except:
                                 pass
                             return False
@@ -272,9 +283,15 @@ def logout():
         if is_development:
             st.write("Debug: Logging out user")
             
-        # Sign out via Supabase API
-        if st.session_state.get('supabase'):
-            st.session_state.supabase.auth.sign_out()
+        # Create a service role client for auth operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv('SUPABASE_URL')
+        service_client = create_client(url, service_key)
+        
+        # Sign out via Supabase API using service role
+        if st.session_state.get('user') and hasattr(st.session_state.user, 'id'):
+            # Admin signout of a specific user
+            service_client.auth.admin.sign_out_user(st.session_state.user.id)
         
         # Clear session state
         st.session_state.user = None
@@ -331,7 +348,7 @@ def clear_auth_cookies():
     except Exception as e:
         st.error(f"Error clearing auth from session state: {str(e)}")
 
-# Function to check for existing auth in cookies and restore session
+# Function to restore authentication data from cookies
 def restore_auth_from_cookies():
     """Restore authentication data from cookies"""
     try:
@@ -342,49 +359,65 @@ def restore_auth_from_cookies():
         auth_token = st.session_state.get('auth_token')
         refresh_token = st.session_state.get('refresh_token')
         
-        if auth_token and refresh_token and st.session_state.get('supabase'):
+        if auth_token and refresh_token:
             if is_development:
                 st.write("Debug: Found stored tokens, attempting to restore session")
             
+            # Create a service role client for auth operations
+            service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+            url = os.getenv('SUPABASE_URL')
+            service_client = create_client(url, service_key)
+            
             # Try to set the auth and restore the session
             try:
-                # Attempt to use the auth token
-                st.session_state.supabase.auth.set_session(auth_token, refresh_token)
-                
-                # Verify token by fetching user
-                auth_user = st.session_state.supabase.auth.get_user()
-                
-                if auth_user and hasattr(auth_user, 'user'):
-                    st.session_state.user = auth_user.user
-                    st.session_state.auth_state = "authenticated"
-                    if is_development:
-                        st.write(f"Debug: Successfully restored auth for user: {auth_user.user.email}")
-                    return True
-                else:
-                    if is_development:
-                        st.write("Debug: Failed to restore user from auth token")
+                # Attempt to use the auth token - we can't set session with service role
+                # Instead, use the token to get the user directly
+                try:
+                    # Get user by JWT
+                    auth_user = service_client.auth.get_user(auth_token)
                     
-                    # Try to refresh the token
-                    try:
+                    if auth_user and hasattr(auth_user, 'user'):
+                        st.session_state.user = auth_user.user
+                        st.session_state.auth_state = "authenticated"
                         if is_development:
-                            st.write("Debug: Attempting to refresh token")
-                        new_session = st.session_state.supabase.auth.refresh_session()
-                        if new_session:
-                            st.session_state.user = new_session.user
-                            save_auth_to_cookie(new_session.session)
-                            st.session_state.auth_state = "authenticated"
+                            st.write(f"Debug: Successfully restored auth for user: {auth_user.user.email}")
+                        return True
+                    else:
+                        if is_development:
+                            st.write("Debug: Failed to restore user from auth token")
+                        
+                        # Try to refresh the token
+                        try:
                             if is_development:
-                                st.write(f"Debug: Successfully refreshed token for user: {new_session.user.email}")
-                            return True
-                    except Exception as refresh_err:
-                        if is_development:
-                            st.write(f"Debug: Token refresh failed: {str(refresh_err)}")
-                        # Clear invalid auth data
-                        clear_auth_cookies()
-                        st.session_state.auth_state = "needs_login"
-            except Exception as auth_err:
+                                st.write("Debug: Attempting to refresh token")
+                                
+                            # Create a client with the refresh token
+                            client = create_client(url, service_key)
+                            client.auth.set_session(auth_token, refresh_token)
+                            new_session = client.auth.refresh_session()
+                            
+                            if new_session:
+                                st.session_state.user = new_session.user
+                                save_auth_to_cookie(new_session.session)
+                                st.session_state.auth_state = "authenticated"
+                                if is_development:
+                                    st.write(f"Debug: Successfully refreshed token for user: {new_session.user.email}")
+                                return True
+                        except Exception as refresh_err:
+                            if is_development:
+                                st.write(f"Debug: Token refresh failed: {str(refresh_err)}")
+                            # Clear invalid auth data
+                            clear_auth_cookies()
+                            st.session_state.auth_state = "needs_login"
+                except Exception as auth_err:
+                    if is_development:
+                        st.write(f"Debug: Error getting user from token: {str(auth_err)}")
+                    # Clear the invalid auth data
+                    clear_auth_cookies()
+                    st.session_state.auth_state = "needs_login"
+            except Exception as session_err:
                 if is_development:
-                    st.write(f"Debug: Error setting session from tokens: {str(auth_err)}")
+                    st.write(f"Debug: Error setting session from tokens: {str(session_err)}")
                 # Clear the invalid auth data
                 clear_auth_cookies()
                 st.session_state.auth_state = "needs_login"
@@ -405,41 +438,50 @@ def get_current_user():
     """Get the current authenticated user"""
     try:
         if st.session_state.get('user'):
+            # Create a service role client for auth operations
+            service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+            url = os.getenv('SUPABASE_URL')
+            service_client = create_client(url, service_key)
+            
             # Verify token validity by making a simple query
             try:
-                if st.session_state.get('supabase'):
-                    # Test with a simple query to verify token validity
-                    test = st.session_state.supabase.table('users').select('id').limit(1).execute()
-                    if test.data:
-                        # Token is valid
-                        return st.session_state.user
-                    else:
-                        # Token is invalid, try to refresh
-                        if is_development:
-                            st.write("Debug: Token invalid, attempting to refresh")
-                        refresh_token = st.session_state.get('refresh_token')
-                        if refresh_token:
-                            try:
-                                new_session = st.session_state.supabase.auth.refresh_session()
-                                if new_session:
-                                    st.session_state.user = new_session.user
-                                    save_auth_to_cookie(new_session.session)
-                                    if is_development:
-                                        st.write("Debug: Token refreshed successfully")
-                                    return st.session_state.user
-                            except Exception as refresh_error:
+                # Test with a simple query to verify user exists
+                user_id = st.session_state.user.id
+                test = service_client.table('users').select('id').eq('id', user_id).limit(1).execute()
+                
+                if test.data:
+                    # User exists in database
+                    return st.session_state.user
+                else:
+                    # User not found, try to refresh token
+                    if is_development:
+                        st.write("Debug: User not found in database, attempting to refresh token")
+                    refresh_token = st.session_state.get('refresh_token')
+                    auth_token = st.session_state.get('auth_token')
+                    
+                    if refresh_token and auth_token:
+                        try:
+                            # Create a client with the refresh token
+                            temp_client = create_client(url, service_key)
+                            temp_client.auth.set_session(auth_token, refresh_token)
+                            new_session = temp_client.auth.refresh_session()
+                            
+                            if new_session:
+                                st.session_state.user = new_session.user
+                                save_auth_to_cookie(new_session.session)
                                 if is_development:
-                                    st.write(f"Debug: Token refresh failed: {str(refresh_error)}")
-                                # Clear invalid auth data
-                                st.session_state.user = None
-                                clear_auth_cookies()
-                        else:
-                            # No refresh token, clear invalid auth
+                                    st.write("Debug: Token refreshed successfully")
+                                return st.session_state.user
+                        except Exception as refresh_error:
+                            if is_development:
+                                st.write(f"Debug: Token refresh failed: {str(refresh_error)}")
+                            # Clear invalid auth data
                             st.session_state.user = None
                             clear_auth_cookies()
-                else:
-                    # No supabase client, can't verify
-                    return st.session_state.user
+                    else:
+                        # No refresh token, clear invalid auth
+                        st.session_state.user = None
+                        clear_auth_cookies()
             except Exception as token_check_error:
                 if is_development:
                     st.write(f"Debug: Token check error: {str(token_check_error)}")
@@ -470,10 +512,23 @@ def handle_auth_state():
         if auth_state == "token_error":
             if is_development:
                 st.write("Debug: Attempting to fix token error")
+            
             refresh_token = st.session_state.get('refresh_token')
-            if refresh_token and st.session_state.get('supabase'):
+            auth_token = st.session_state.get('auth_token')
+            
+            if refresh_token and auth_token:
                 try:
-                    new_session = st.session_state.supabase.auth.refresh_session()
+                    # Create a service role client for auth operations
+                    service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+                    url = os.getenv('SUPABASE_URL')
+                    
+                    # Create a temporary client with the user's tokens
+                    temp_client = create_client(url, service_key)
+                    temp_client.auth.set_session(auth_token, refresh_token)
+                    
+                    # Try to refresh the session
+                    new_session = temp_client.auth.refresh_session()
+                    
                     if new_session:
                         st.session_state.user = new_session.user
                         save_auth_to_cookie(new_session.session)
@@ -489,7 +544,7 @@ def handle_auth_state():
                     st.session_state.auth_state = "needs_login"
                     return "needs_login"
             else:
-                # No refresh token or Supabase client, mark as needing login
+                # No refresh token or auth token, mark as needing login
                 st.session_state.auth_state = "needs_login"
                 return "needs_login"
         

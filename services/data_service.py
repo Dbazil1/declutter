@@ -29,7 +29,8 @@ def debug_env():
 def init_supabase():
     try:
         url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
+        # Use service role key instead of regular key for all operations
+        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
         
         # Only show debug info in development mode
         if is_development:
@@ -43,9 +44,9 @@ def init_supabase():
                 
             if key:
                 masked_key = key[:5] + "..." + key[-5:] if len(key) > 10 else "***"
-                st.write(f"Debug: Supabase API key available: {masked_key}")
+                st.write(f"Debug: Supabase SERVICE ROLE key available: {masked_key}")
             else:
-                st.error("Error: SUPABASE_KEY environment variable is not set")
+                st.error("Error: SUPABASE_SERVICE_ROLE_KEY environment variable is not set")
                 return None
         else:
             # In production, just check if variables exist
@@ -57,7 +58,7 @@ def init_supabase():
             client = create_client(url, key)
             # Test the connection
             if is_development:
-                st.write("Attempting to connect to Supabase...")
+                st.write("Attempting to connect to Supabase with SERVICE ROLE key...")
                 # Simple query to test connection
                 try:
                     test = client.table('users').select('count', count='exact').execute()
@@ -95,8 +96,13 @@ def load_items(force_reload=False):
     if force_reload:
         st.cache_data.clear()
     try:
+        # Use service role key for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
         # Get items with their images and sales images in a single query
-        response = st.session_state.supabase.table('items')\
+        response = service_client.table('items')\
             .select('*, item_images(image_url, sales_image_overlay_url, sales_image_extended_url)')\
             .eq('user_id', st.session_state.user.id)\
             .execute()
@@ -133,65 +139,31 @@ def add_item(item_data, image=None):
             st.error("User not authenticated")
             return None
         
-        # Try to create the item with user token first
+        # Always use service role key for item operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
+        # Insert the item using service role
         try:
-            response = st.session_state.supabase.table('items')\
+            response = service_client.table('items')\
                 .insert(item_data)\
                 .execute()
                 
             if not response.data:
-                # If user token fails, try with service role key
-                if is_development:
-                    st.write("User token insert failed, trying with service role key...")
-                
-                # Create a service role client
-                service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-                url = os.getenv("SUPABASE_URL")
-                service_client = create_client(url, service_key)
-                
-                # Try again with service role
-                response = service_client.table('items')\
-                    .insert(item_data)\
-                    .execute()
-                    
-                if not response.data:
-                    st.error("Failed to create item, even with service role key")
-                    return None
-        except Exception as insert_error:
-            # If user token throws exception, try with service role key
-            if is_development:
-                st.write(f"Insert error: {str(insert_error)}, trying with service role key...")
-            
-            # Create a service role client
-            service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-            url = os.getenv("SUPABASE_URL")
-            service_client = create_client(url, service_key)
-            
-            # Try again with service role
-            try:
-                response = service_client.table('items')\
-                    .insert(item_data)\
-                    .execute()
-                    
-                if not response.data:
-                    st.error("Failed to create item, even with service role key")
-                    return None
-            except Exception as service_error:
-                st.error(f"Error adding item with service role: {str(service_error)}")
-                if is_development:
-                    st.error(traceback.format_exc())
+                st.error("Failed to create item")
                 return None
+        except Exception as insert_error:
+            st.error(f"Error adding item: {str(insert_error)}")
+            if is_development:
+                st.error(traceback.format_exc())
+            return None
             
         item = response.data[0]
         
         # If there's an image, upload it
         if image:
             try:
-                # Create a service role client for storage operations
-                service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-                url = os.getenv("SUPABASE_URL")
-                service_client = create_client(url, service_key)
-                
                 # Generate a unique filename
                 file_extension = image.name.split('.')[-1]
                 filename = f"{item['id']}/{uuid.uuid4()}.{file_extension}"
@@ -227,44 +199,35 @@ def add_item(item_data, image=None):
                         item_data['price_local'], 
                         item_data['name']
                     )
-                except Exception as photo_error:
-                    st.error(f"Error generating sales photos: {str(photo_error)}")
+                except Exception as sales_error:
+                    # Non-critical error, log but continue
                     if is_development:
-                        st.error(traceback.format_exc())
-                
-                # Update the item with the image URL
-                item['image_url'] = image_url
-            except Exception as image_error:
-                st.error(f"Error uploading image: {str(image_error)}")
+                        st.warning(f"Error generating sales photos: {str(sales_error)}")
+                        st.warning(traceback.format_exc())
+            except Exception as storage_error:
+                # Log the storage error but continue
                 if is_development:
-                    st.error(traceback.format_exc())
-                # Continue without the image
+                    st.warning(f"Error uploading image: {str(storage_error)}")
+                    st.warning(traceback.format_exc())
         
-        # Clear cache to ensure fresh data
-        st.cache_data.clear()
         return item
     except Exception as e:
-        st.error(f"Error adding item: {str(e)}")
-        if hasattr(e, 'json'):
-            error_data = e.json()
-            if error_data.get('code') == '42501':
-                st.error("Permission denied. Please ensure you have the correct permissions to add items.")
-            elif error_data.get('message'):
-                st.error(f"Database error: {error_data['message']}")
-        st.error(traceback.format_exc())
+        st.error(f"Error in add_item: {str(e)}")
+        if is_development:
+            st.error(traceback.format_exc())
         return None
 
-# Update item
+# Update an existing item
 def update_item(item_id, item_data, image=None):
     try:
-        # Check if user is authenticated
-        if not st.session_state.get('user'):
-            st.error("User not authenticated")
-            return None
-            
-        # Get the current item data to check for changes
-        current_item = st.session_state.supabase.table('items')\
-            .select('*, item_images(image_url)')\
+        # Always use service role key for item operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
+        # Check if item exists and belongs to user
+        current_item = service_client.table('items')\
+            .select('*, item_images(*)')\
             .eq('id', item_id)\
             .execute()
         
@@ -274,51 +237,21 @@ def update_item(item_id, item_data, image=None):
             
         current_item = current_item.data[0]
         
-        # Try to update with user token first
+        # Update the item using service role
         try:
-            response = st.session_state.supabase.table('items')\
-                .update(item_data)\
-                .eq('id', item_id)\
-                .execute()
-                
-            if not response.data:
-                # If user token update fails, try with service role key
-                if is_development:
-                    st.write("User token update failed, trying with service role key...")
-                
-                # Create a service role client
-                service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-                url = os.getenv("SUPABASE_URL")
-                service_client = create_client(url, service_key)
-                
-                # Try again with service role
-                response = service_client.table('items')\
-                    .update(item_data)\
-                    .eq('id', item_id)\
-                    .execute()
-                    
-                if not response.data:
-                    st.error("Error: Item update query returned no data, even with service role")
-                    return None
-        except Exception as update_error:
-            # If user token throws exception, try with service role key
-            if is_development:
-                st.write(f"Update error: {str(update_error)}, trying with service role key...")
-            
-            # Create a service role client
-            service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-            url = os.getenv("SUPABASE_URL")
-            service_client = create_client(url, service_key)
-            
-            # Try again with service role
             response = service_client.table('items')\
                 .update(item_data)\
                 .eq('id', item_id)\
                 .execute()
                 
             if not response.data:
-                st.error("Error: Item update query returned no data, even with service role")
+                st.error("Error: Item update failed")
                 return None
+        except Exception as update_error:
+            st.error(f"Error updating item: {str(update_error)}")
+            if is_development:
+                st.error(traceback.format_exc())
+            return None
         
         # Get the updated item data
         item = response.data[0]
@@ -337,11 +270,6 @@ def update_item(item_id, item_data, image=None):
                 # Generate a unique filename
                 file_extension = image.name.split('.')[-1]
                 filename = f"{item['id']}/{uuid.uuid4()}.{file_extension}"
-                
-                # Use service role for storage access
-                service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-                url = os.getenv("SUPABASE_URL")
-                service_client = create_client(url, service_key)
                 
                 # Upload the image to Supabase Storage
                 storage_response = service_client.storage\
@@ -382,11 +310,6 @@ def update_item(item_id, item_data, image=None):
         # Generate and store sales photos if needed
         if should_regenerate and item['image_url']:
             try:
-                # Create a service role client for storage operations
-                service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-                url = os.getenv("SUPABASE_URL")
-                service_client = create_client(url, service_key)
-                
                 # Clear any existing sales photos
                 try:
                     # List all files for this item
@@ -429,12 +352,18 @@ def update_item(item_id, item_data, image=None):
 # Generate a unique code for public links
 def generate_link_code(length=10):
     characters = string.ascii_letters + string.digits
+    
+    # Use service role key for database operations
+    service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    url = os.getenv("SUPABASE_URL")
+    service_client = create_client(url, service_key)
+    
     while True:
         # Generate a random code
         code = ''.join(random.choice(characters) for _ in range(length))
         
         # Check if this code already exists
-        response = st.session_state.supabase.table('public_links')\
+        response = service_client.table('public_links')\
             .select('id')\
             .eq('link_code', code)\
             .execute()
@@ -448,8 +377,13 @@ def create_public_link(name="My Items Collection"):
     try:
         link_code = generate_link_code()
         
+        # Use service role key for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
         # Create the public link record
-        response = st.session_state.supabase.table('public_links')\
+        response = service_client.table('public_links')\
             .insert({
                 'user_id': st.session_state.user.id,
                 'link_code': link_code,
@@ -469,7 +403,12 @@ def create_public_link(name="My Items Collection"):
 # Get all public links for the current user
 def get_user_public_links():
     try:
-        response = st.session_state.supabase.table('public_links')\
+        # Use service role key for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
+        response = service_client.table('public_links')\
             .select('*')\
             .eq('user_id', st.session_state.user.id)\
             .execute()
@@ -482,7 +421,12 @@ def get_user_public_links():
 # Update a public link
 def update_public_link(link_id, data):
     try:
-        response = st.session_state.supabase.table('public_links')\
+        # Use service role key for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
+        response = service_client.table('public_links')\
             .update(data)\
             .eq('id', link_id)\
             .eq('user_id', st.session_state.user.id)\
@@ -498,23 +442,31 @@ def update_public_link(link_id, data):
 # Delete a public link
 def delete_public_link(link_id):
     try:
-        response = st.session_state.supabase.table('public_links')\
+        # Use service role key for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
+        response = service_client.table('public_links')\
             .delete()\
             .eq('id', link_id)\
             .eq('user_id', st.session_state.user.id)\
             .execute()
             
-        if response.data:
-            return True
-        return False
+        return True
     except Exception as e:
         st.error(f"Error deleting public link: {str(e)}")
         return False
 
-# Get public link by code (no authentication required)
+# Get a public link by its code
 def get_public_link_by_code(link_code):
     try:
-        response = st.session_state.supabase.table('public_links')\
+        # Use service role key for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
+        response = service_client.table('public_links')\
             .select('*')\
             .eq('link_code', link_code)\
             .eq('is_active', True)\
@@ -527,48 +479,48 @@ def get_public_link_by_code(link_code):
         st.error(f"Error fetching public link: {str(e)}")
         return None
 
-# Load available items for a public link
+# Load items for a public link
 def load_public_items(user_id):
     try:
-        # Get available items with their images
-        response = st.session_state.supabase.table('items')\
+        # Use service role key for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
+        response = service_client.table('items')\
             .select('*, item_images(image_url)')\
             .eq('user_id', user_id)\
             .eq('is_sold', False)\
             .execute()
             
-        # Process the response to include image URLs and filter for available items
+        # Process the response to include image URLs
         items = []
         for item in response.data:
-            # Skip items that are explicitly unavailable
-            if item.get('status') == 'unavailable':
-                continue
-                
             # Get the first image URL if available
             image_url = None
             if 'item_images' in item and item['item_images']:
                 image_url = item['item_images'][0]['image_url']
             
-            # Add image URL to the item
+            # Add the image URL to the item
             item['image_url'] = image_url
             items.append(item)
             
         return items
     except Exception as e:
         st.error(f"Error loading public items: {str(e)}")
-        return [] 
+        return []
 
 # Update user's WhatsApp information
 def update_user_whatsapp(phone_number, share_for_items=False):
     try:
-        # Format phone number to standard E.164 format
-        # This is a basic cleaning, not a full validation
-        cleaned_phone = ''.join(c for c in phone_number if c.isdigit() or c == '+')
+        # Use service role key for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
         
-        # Update user's WhatsApp info in database
-        response = st.session_state.supabase.table('users')\
+        response = service_client.table('users')\
             .update({
-                'whatsapp_phone': cleaned_phone,
+                'whatsapp_phone': phone_number,
                 'share_whatsapp_for_items': share_for_items
             })\
             .eq('id', st.session_state.user.id)\
@@ -576,13 +528,18 @@ def update_user_whatsapp(phone_number, share_for_items=False):
             
         return bool(response.data)
     except Exception as e:
-        st.error(f"Error updating WhatsApp information: {str(e)}")
+        st.error(f"Error updating WhatsApp info: {str(e)}")
         return False
 
 # Get user's WhatsApp information
 def get_user_whatsapp_info(user_id):
     try:
-        response = st.session_state.supabase.table('users')\
+        # Use service role key for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
+        response = service_client.table('users')\
             .select('whatsapp_phone, share_whatsapp_for_items')\
             .eq('id', user_id)\
             .execute()
@@ -597,7 +554,12 @@ def get_user_whatsapp_info(user_id):
 # Update user's WhatsApp sharing preferences
 def update_whatsapp_sharing(share_for_items):
     try:
-        response = st.session_state.supabase.table('users')\
+        # Use service role key for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv("SUPABASE_URL")
+        service_client = create_client(url, service_key)
+        
+        response = service_client.table('users')\
             .update({
                 'share_whatsapp_for_items': share_for_items
             })\

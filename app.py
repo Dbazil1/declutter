@@ -4,6 +4,7 @@ import os
 import sys
 from urllib.parse import urlparse
 import traceback
+from supabase import create_client
 
 # Add the current directory to the Python path to help with module discovery
 app_dir = os.path.dirname(os.path.abspath(__file__))
@@ -62,6 +63,11 @@ def debug_auth_status():
     st.sidebar.markdown("---")
     st.sidebar.write("### Debug Information")
     
+    # Create a service role client for database operations
+    service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    url = os.getenv('SUPABASE_URL')
+    service_client = create_client(url, service_key)
+    
     # Check if user exists in session
     if 'user' in st.session_state and st.session_state.user:
         st.sidebar.write("✅ User is authenticated")
@@ -70,17 +76,16 @@ def debug_auth_status():
             st.sidebar.write(f"Email: {st.session_state.user.email}")
             
         # Check if user has a valid token
-        if 'supabase' in st.session_state:
-            try:
-                # Test a simple query to see if auth is valid
-                test_result = st.session_state.supabase.table('users').select('id').limit(1).execute()
-                if test_result.data:
-                    st.sidebar.write("✅ Supabase token is valid")
-                else:
-                    st.sidebar.write("❌ Supabase token appears invalid (query returned no data)")
-            except Exception as e:
-                st.sidebar.write("❌ Supabase token is invalid or expired")
-                st.sidebar.write(f"Error: {str(e)}")
+        try:
+            # Test a simple query to see if auth is valid
+            test_result = service_client.table('users').select('id').eq('id', st.session_state.user.id).limit(1).execute()
+            if test_result.data:
+                st.sidebar.write("✅ Supabase connection is valid")
+            else:
+                st.sidebar.write("❌ User record not found in database")
+        except Exception as e:
+            st.sidebar.write("❌ Error querying database")
+            st.sidebar.write(f"Error: {str(e)}")
     else:
         st.sidebar.write("❌ User is not authenticated")
     
@@ -143,9 +148,14 @@ else:
         # Show login UI
         render_login_ui()
     else:
+        # Create a service role client for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv('SUPABASE_URL')
+        service_client = create_client(url, service_key)
+        
         # Get user's first name from the database
         try:
-            user_info = st.session_state.supabase.table('users')\
+            user_info = service_client.table('users')\
                 .select('first_name')\
                 .eq('id', st.session_state.user.id)\
                 .execute()

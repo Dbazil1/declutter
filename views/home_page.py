@@ -2,7 +2,8 @@ import os
 import streamlit as st
 import traceback
 from utils.translation_utils import t
-from services.data_service import load_items
+from services.data_service import load_items, is_development
+from supabase import create_client
 
 # Set development mode flag
 is_development = os.getenv('ENVIRONMENT', '').lower() == 'development'
@@ -16,9 +17,14 @@ def render_home_page():
         if is_development:
             st.write(f"Debug: Rendering home page for user: {user.id if user else None}")
         
+        # Create a service role client for database operations
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv('SUPABASE_URL')
+        service_client = create_client(url, service_key)
+        
         # Get user's first name from the database
         try:
-            user_info = st.session_state.supabase.table('users')\
+            user_info = service_client.table('users')\
                 .select('first_name')\
                 .eq('id', user.id)\
                 .execute()
@@ -26,14 +32,16 @@ def render_home_page():
             first_name = 'User'  # Default value
             if user_info and hasattr(user_info, 'data') and user_info.data:
                 first_name = user_info.data[0].get('first_name', 'User')
+                
+            if is_development:
+                st.write(f"Current user: {first_name} (ID: {user.id})")
+                
+            st.header(t('greeting', name=first_name))
         except Exception as e:
             if is_development:
                 st.error(f"Error getting user info: {str(e)}")
-                st.error(traceback.format_exc())
-            first_name = 'User'
-        
-        # Display welcome message
-        st.markdown(f'<h1 class="greeting">Welcome back, {first_name}!</h1>', unsafe_allow_html=True)
+            # Use a generic greeting
+            st.header(t('greeting', name='User'))
         
         # Load items
         try:
