@@ -1,7 +1,7 @@
 import streamlit as st
 import io
 from utils.translation_utils import t
-from services.data_service import update_item
+from services.data_service import update_item, add_item
 from utils.image_utils import generate_sales_photo
 from PIL import Image
 
@@ -67,7 +67,8 @@ def render_edit_modal(rerun_callback=None):
                         "price_usd": int(price_usd) if price_usd > 0 else None,
                         "price_local": int(price_local) if price_local > 0 else None,
                         "sale_status": selected_status,
-                        "is_sold": selected_status == 'paid_picked_up'
+                        "is_sold": selected_status == 'paid_picked_up',
+                        "user_id": st.session_state.user.id
                     }
                     if selected_status != 'available' and sold_to:
                         item_data['sold_to'] = sold_to
@@ -204,7 +205,8 @@ def render_add_item_form(rerun_callback=None):
         # Optional image upload
         image = st.file_uploader(t('upload_image'), type=["jpg", "jpeg", "png"])
         
-        if st.form_submit_button(t('add_item_button')):
+        submit = st.form_submit_button(t('add_item_button'))
+        if submit:
             if not name:
                 st.error(t('fill_required_fields'))
             else:
@@ -221,7 +223,8 @@ def render_add_item_form(rerun_callback=None):
                 if price_usd <= 0 and price_local <= 0:
                     st.error("Please enter at least one price (USD or Local)")
                     return
-                elif selected_status != 'available' and sold_to:
+                
+                if selected_status != 'available' and sold_to:
                     item_data['sold_to'] = sold_to
                 
                 new_item = add_item(item_data, image)
