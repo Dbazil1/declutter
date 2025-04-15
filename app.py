@@ -1,26 +1,54 @@
 import streamlit as st
 import asyncio
 import os
+import sys
 from urllib.parse import urlparse
-from views.home_page import render_home_page
-from views.settings_page import render_settings_page
-from views.public_links_page import render_public_links_page
-from services.auth_service import get_current_user, handle_auth_state
-from utils.translation_utils import t
 import traceback
 
-# Import services
-from services.data_service import init_supabase, init_postgrest, load_items
-from services.auth_service import logout, restore_auth_from_cookies
+# Add the current directory to the Python path to help with module discovery
+app_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, app_dir)
 
-# Import UI components
-from components.ui_components import apply_custom_css, render_sidebar_nav, render_login_ui
-from components.item_components import render_add_item_form
+# Show debugging information if needed
+if os.getenv('DEBUG_IMPORTS', '').lower() == 'true':
+    st.write("Python path:", sys.path)
+    st.write("Current directory:", os.getcwd())
+    st.write("App directory:", app_dir)
+    if os.path.exists("views"):
+        st.write("Views directory exists with files:", os.listdir("views"))
+    else:
+        st.write("Views directory does not exist")
 
-# Import page renderers
-from views.items_page import render_items_page
-from views.photos_page import render_photos_page
-from views.public_page import render_public_page
+# Import required modules with error handling
+try:
+    # Views
+    from views.home_page import render_home_page
+    from views.settings_page import render_settings_page
+    from views.public_links_page import render_public_links_page
+    from views.items_page import render_items_page
+    from views.photos_page import render_photos_page
+    from views.public_page import render_public_page
+    
+    # Services
+    from services.auth_service import get_current_user, handle_auth_state
+    from services.auth_service import logout, restore_auth_from_cookies
+    from services.data_service import init_supabase, init_postgrest, load_items
+    
+    # UI components
+    from components.ui_components import apply_custom_css, render_sidebar_nav, render_login_ui
+    from components.item_components import render_add_item_form
+    
+    # Utils
+    from utils.translation_utils import t
+except ImportError as e:
+    st.error(f"Import error: {str(e)}")
+    st.error(traceback.format_exc())
+    st.error("This error indicates Python cannot find the modules.")
+    st.error("Possible solutions:")
+    st.error("1. Make sure you have __init__.py files in all subdirectories")
+    st.error("2. Run with proper working directory: python -m streamlit run app.py")
+    st.error("3. Set the PYTHONPATH environment variable to include your project root")
+    st.stop()
 
 # Set development mode flag
 is_development = os.getenv('ENVIRONMENT', '').lower() == 'development'
