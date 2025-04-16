@@ -411,7 +411,7 @@ def apply_custom_css():
                     font-size: 16px !important; /* Prevents iOS zoom on focus */
                 }
                 
-                /* Style the collapse/expand button */
+                /* Improve sidebar toggle button on mobile */
                 [data-testid="collapsedControl"] {
                     height: 50px !important;
                     width: 50px !important;
@@ -420,60 +420,6 @@ def apply_custom_css():
                     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
                     z-index: 999 !important;
                     animation: pulse 2s ease-in-out infinite, glow 4s ease-in-out 1;
-                }
-                
-                /* Replace the default arrow with hamburger icon */
-                [data-testid="collapsedControl"] svg {
-                    display: none !important; /* Hide the default arrow icon */
-                }
-                
-                /* Create hamburger icon using ::before pseudo-element */
-                [data-testid="collapsedControl"]::before {
-                    content: "☰" !important; /* Unicode hamburger symbol */
-                    font-size: 24px !important;
-                    color: #333 !important;
-                    position: absolute !important;
-                    top: 50% !important;
-                    left: 50% !important;
-                    transform: translate(-50%, -50%) !important;
-                    display: flex !important;
-                    justify-content: center !important;
-                    align-items: center !important;
-                }
-                
-                /* Style for the expanded sidebar button (X icon) */
-                button[kind="header"]:not([data-testid="collapsedControl"]),
-                .st-emotion-cache-1egp75f,
-                [data-testid="baseButton-headerNoPadding"] {
-                    height: 50px !important;
-                    width: 50px !important;
-                    border-radius: 25px !important;
-                    background-color: rgba(0, 0, 0, 0.1) !important;
-                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
-                }
-                
-                /* Hide the default arrow on the expanded button */
-                button[kind="header"]:not([data-testid="collapsedControl"]) svg,
-                .st-emotion-cache-1egp75f svg,
-                [data-testid="baseButton-headerNoPadding"] svg {
-                    display: none !important;
-                }
-                
-                /* Add an X symbol to the expanded button */
-                button[kind="header"]:not([data-testid="collapsedControl"])::before,
-                .st-emotion-cache-1egp75f::before,
-                [data-testid="baseButton-headerNoPadding"]::before {
-                    content: "×" !important; /* Unicode X symbol */
-                    font-size: 30px !important;
-                    font-weight: bold !important;
-                    color: #333 !important;
-                    position: absolute !important;
-                    top: 50% !important;
-                    left: 50% !important;
-                    transform: translate(-50%, -50%) !important;
-                    display: flex !important;
-                    justify-content: center !important;
-                    align-items: center !important;
                 }
                 
                 /* Subtle animation to draw attention to the button */
