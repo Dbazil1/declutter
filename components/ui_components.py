@@ -455,11 +455,12 @@ def render_sidebar_nav(current_page, first_name, on_logout):
     # Add language selector at the very bottom
     st.sidebar.markdown("---")  # Add a divider
     selected_lang = st.sidebar.selectbox(
-        "Language / Idioma",
-        options=[('English', 'en'), ('Español', 'es')],
+        "",  # Empty label for cleaner look
+        options=[('🇺🇸 English', 'en'), ('🇲🇽 Español', 'es')],
         format_func=lambda x: x[0],
         key='language_selector',
-        index=0 if st.session_state.language == 'en' else 1
+        index=0 if st.session_state.language == 'en' else 1,
+        label_visibility="collapsed"
     )
     if selected_lang[1] != st.session_state.language:
         st.session_state.language = selected_lang[1]
@@ -579,14 +580,24 @@ def render_login_ui():
             else:
                 st.error("Supabase client not properly initialized.")
 
-    # Add language selector after the forms
-    st.markdown("---")  # Add a divider
-    selected_lang = st.selectbox(
-        "🌐 Language / Idioma",
-        options=[('English', 'en'), ('Español', 'es')],
-        format_func=lambda x: x[0],
-        key='login_language_selector',
-        index=0 if st.session_state.language == 'en' else 1
-    )
-    if selected_lang[1] != st.session_state.language:
-        st.session_state.language = selected_lang[1] 
+    # Add language selector in the top right corner
+    st.markdown("""
+        <div class="language-selector">
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Create a container for the language dropdown in the top right
+    with st.container():
+        st.markdown('<div style="position: absolute; top: 10px; right: 20px; z-index: 1000;">', unsafe_allow_html=True)
+        selected_lang = st.selectbox(
+            "",  # Empty label for cleaner look
+            options=[('🇺🇸 English', 'en'), ('🇲🇽 Español', 'es')],
+            format_func=lambda x: x[0],
+            key='login_language_selector',
+            index=0 if st.session_state.language == 'en' else 1,
+            label_visibility="collapsed"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        if selected_lang[1] != st.session_state.language:
+            st.session_state.language = selected_lang[1] 
