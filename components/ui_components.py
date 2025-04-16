@@ -3,6 +3,7 @@ import time
 import os
 import traceback
 from utils.translation_utils import t
+from services.auth_service import sign_in_user
 
 # Set development mode flag
 is_development = os.getenv('ENVIRONMENT', '').lower() == 'development'
@@ -464,8 +465,7 @@ def render_sidebar_nav(current_page, first_name, on_logout):
         st.session_state.language = selected_lang[1]
 
 def render_login_ui():
-    from utils.translation_utils import t
-    
+    """Render the login UI."""
     # Center the content using columns
     left_col, center_col, right_col = st.columns([1, 2, 1])
     
@@ -491,28 +491,16 @@ def render_login_ui():
                 submit = st.form_submit_button(t('login'))
                 
                 if submit:
-                    from services.auth_service import login
-                    if login(email, password):
-                        # Clear the last signup email after successful login
-                        if 'last_signup_email' in st.session_state:
-                            del st.session_state.last_signup_email
-                        st.rerun()
-            
-            # Debug option - only visible in development
-            if os.getenv('ENVIRONMENT') == 'development':
-                if st.button("🔧 Debug Connection", key="debug_connection"):
-                    from services.data_service import debug_env
-                    debug_env()
-                    # Check if supabase client is initialized properly before accessing auth.url
-                    if 'supabase' in st.session_state and st.session_state.supabase and hasattr(st.session_state.supabase, 'auth'):
-                        try:
-                            # Safely check the URL from the supabase client
-                            st.write("Supabase connection status:", "Active" if st.session_state.supabase else "Not connected")
-                            st.write("Supabase URL:", os.getenv("SUPABASE_URL", "Not set"))
-                        except Exception as e:
-                            st.error(f"Error accessing Supabase client: {str(e)}")
+                    if email and password:
+                        success = sign_in_user(email, password)
+                        if success:
+                            # Clear the last signup email after successful login
+                            if 'last_signup_email' in st.session_state:
+                                del st.session_state.last_signup_email
+                            st.success("Login successful!")
+                            st.rerun()
                     else:
-                        st.error("Supabase client not properly initialized.")
+                        st.error("Please enter both email and password.")
         
         with tab2:  # Signup tab
             # Show success message above the form if exists
@@ -520,7 +508,7 @@ def render_login_ui():
                 st.success(t('signup_success'))
                 st.info(t('proceed_to_login'))
                 del st.session_state.signup_success
-
+ 
             with st.form("signup_form_unique_key"):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -546,6 +534,7 @@ def render_login_ui():
                 submit = st.form_submit_button(t('signup'))
                 
                 if submit:
+                    from services.auth_service import signup
                     # Trim whitespace from all inputs
                     first_name = first_name.strip() if first_name else ""
                     last_name = last_name.strip() if last_name else ""
@@ -568,21 +557,36 @@ def render_login_ui():
                                 st.write(f"Setting WhatsApp info in session: {full_phone}, Share: {whatsapp_consent}")
                         
                         with st.spinner(t('creating_account')):
-                            from services.auth_service import signup
                             if signup(new_email, new_password, first_name, last_name):
                                 # Store success state and email
                                 st.session_state.signup_success = True
                                 st.session_state.last_signup_email = new_email
                                 st.rerun()
-        
-        # Add language selector after the forms
-        st.markdown("---")  # Add a divider
-        selected_lang = st.selectbox(
-            "🌐 Language / Idioma",
-            options=[('English', 'en'), ('Español', 'es')],
-            format_func=lambda x: x[0],
-            key='login_language_selector',
-            index=0 if st.session_state.language == 'en' else 1
-        )
-        if selected_lang[1] != st.session_state.language:
-            st.session_state.language = selected_lang[1] 
+
+    # Debug option - only visible in development
+    if os.getenv('ENVIRONMENT') == 'development':
+        if st.button("🔧 Debug Connection", key="debug_connection"):
+            from services.data_service import debug_env
+            debug_env()
+            # Check if supabase client is initialized properly before accessing auth.url
+            if 'supabase' in st.session_state and st.session_state.supabase and hasattr(st.session_state.supabase, 'auth'):
+                try:
+                    # Safely check the URL from the supabase client
+                    st.write("Supabase connection status:", "Active" if st.session_state.supabase else "Not connected")
+                    st.write("Supabase URL:", os.getenv("SUPABASE_URL", "Not set"))
+                except Exception as e:
+                    st.error(f"Error accessing Supabase client: {str(e)}")
+            else:
+                st.error("Supabase client not properly initialized.")
+
+    # Add language selector after the forms
+    st.markdown("---")  # Add a divider
+    selected_lang = st.selectbox(
+        "🌐 Language / Idioma",
+        options=[('English', 'en'), ('Español', 'es')],
+        format_func=lambda x: x[0],
+        key='login_language_selector',
+        index=0 if st.session_state.language == 'en' else 1
+    )
+    if selected_lang[1] != st.session_state.language:
+        st.session_state.language = selected_lang[1] 

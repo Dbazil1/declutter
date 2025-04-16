@@ -5,6 +5,7 @@ import sys
 from urllib.parse import urlparse
 import traceback
 from supabase import create_client
+from auth_state import init_auth_state, is_authenticated
 
 # Add the current directory to the Python path to help with module discovery
 app_dir = os.path.dirname(os.path.abspath(__file__))
@@ -69,16 +70,17 @@ def debug_auth_status():
     service_client = create_client(url, service_key)
     
     # Check if user exists in session
-    if 'user' in st.session_state and st.session_state.user:
+    user = get_current_user()
+    if user and hasattr(user, 'id'):
         st.sidebar.write("✅ User is authenticated")
-        st.sidebar.write(f"User ID: {st.session_state.user.id}")
-        if hasattr(st.session_state.user, 'email'):
-            st.sidebar.write(f"Email: {st.session_state.user.email}")
+        st.sidebar.write(f"User ID: {user.id}")
+        if hasattr(user, 'email'):
+            st.sidebar.write(f"Email: {user.email}")
             
         # Check if user has a valid token
         try:
             # Test a simple query to see if auth is valid
-            test_result = service_client.table('users').select('id').eq('id', st.session_state.user.id).limit(1).execute()
+            test_result = service_client.table('users').select('id').eq('id', user.id).limit(1).execute()
             if test_result.data:
                 st.sidebar.write("✅ Supabase connection is valid")
             else:
@@ -104,24 +106,24 @@ st.set_page_config(
 # Apply custom CSS
 apply_custom_css()
 
+# Initialize auth state
+init_auth_state()
+
 # Initialize session state
 if 'supabase' not in st.session_state:
     st.session_state.supabase = init_supabase()
 
-if 'user' not in st.session_state:
-    st.session_state.user = None
-    # Try to restore authentication from cookies
+# Try to restore authentication from cookies
+if not is_authenticated():
     restore_auth_from_cookies()
 
 if 'postgrest_client' not in st.session_state:
-    asyncio.run(init_postgrest())
+    from services.data_service import init_postgrest
+    # Simply call the function directly, as it's now synchronous
+    init_postgrest()
 
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'available'
-
-# Initialize auth state
-if 'auth_state' not in st.session_state:
-    st.session_state.auth_state = None
 
 # Initialize language
 if 'language' not in st.session_state:
@@ -144,9 +146,10 @@ if public_link_code:
     render_public_page(public_link_code)
 else:
     # Regular app flow
-    if st.session_state.user is None:
+    if not is_authenticated():
         # Show login UI
         render_login_ui()
+        st.stop()
     else:
         # Create a service role client for database operations
         service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
@@ -155,9 +158,10 @@ else:
         
         # Get user's first name from the database
         try:
+            user = get_current_user()
             user_info = service_client.table('users')\
                 .select('first_name')\
-                .eq('id', st.session_state.user.id)\
+                .eq('id', user.id)\
                 .execute()
             
             first_name = 'User'  # Default value
@@ -165,7 +169,7 @@ else:
                 first_name = user_info.data[0].get('first_name', 'User')
                 
             if is_development:
-                st.write(f"Current user: {first_name} (ID: {st.session_state.user.id})")
+                st.write(f"Current user: {first_name} (ID: {user.id})")
         except Exception as e:
             # If there's an error getting user info, use a default name
             if is_development:
@@ -219,8 +223,7 @@ else:
 if is_development:
     st.write("Debug: Session state initialized")
     st.write(f"Debug: Current page: {st.session_state.current_page}")
-    st.write(f"Debug: User: {st.session_state.user}")
-    st.write(f"Debug: Auth state: {st.session_state.auth_state}")
+    st.write(f"Debug: User: {get_current_user()}")
 
 # Main app logic
 try:
@@ -235,13 +238,13 @@ try:
         # Since we're changing page to 'home', we need to render it
         render_home_page()
     elif auth_state == "authenticated":
-        # Only proceed if we have a valid user and the page wasn't already rendered above
-        if st.session_state.user and hasattr(st.session_state.user, 'id'):
+        # Only proceed if we have a valid user
+        user = get_current_user()
+        if user and hasattr(user, 'id'):
             if is_development:
-                st.write(f"Debug: User authenticated: {st.session_state.user.email}")
+                st.write(f"Debug: User authenticated: {user.email}")
             
             # Only render home page here if it wasn't already rendered above
-            # The other pages (settings, public_links) are already handled in the previous section
             if st.session_state.current_page == 'home':
                 render_home_page()
         else:

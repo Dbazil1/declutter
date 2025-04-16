@@ -1,7 +1,6 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from postgrest import AsyncPostgrestClient
 from supabase import create_client
 import traceback
 import uuid
@@ -11,6 +10,7 @@ import string
 from utils.image_utils import generate_and_store_sales_photos
 import datetime
 from utils.translation_utils import t
+from auth_state import get_user_id
 
 # Set development mode flag
 is_development = os.getenv('ENVIRONMENT', '').lower() == 'development'
@@ -76,19 +76,13 @@ def init_supabase():
         st.error(traceback.format_exc())
         return None
 
-# Initialize Supabase PostgREST client for data operations
-async def init_postgrest():
-    if 'postgrest_client' not in st.session_state:
-        # For data operations, we use the service role key
-        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-        
-        st.session_state.postgrest_client = AsyncPostgrestClient(
-            base_url=f"{os.getenv('SUPABASE_URL')}/rest/v1",
-            headers={
-                "apikey": service_key,
-                "Authorization": f"Bearer {service_key}"
-            }
-        )
+# Initialize PostgreSQL client
+def init_postgrest():
+    """
+    Stub function to maintain API compatibility.
+    The app now uses the synchronous Supabase client instead.
+    """
+    pass
 
 # Load items from database
 @st.cache_data(ttl=60)
@@ -96,6 +90,10 @@ def load_items(force_reload=False):
     if force_reload:
         st.cache_data.clear()
     try:
+        user_id = get_user_id()
+        if not user_id:
+            return []
+        
         # Use service role key for database operations
         service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
         url = os.getenv("SUPABASE_URL")
@@ -104,7 +102,7 @@ def load_items(force_reload=False):
         # Get items with their images and sales images in a single query
         response = service_client.table('items')\
             .select('*, item_images(image_url, sales_image_overlay_url, sales_image_extended_url)')\
-            .eq('user_id', st.session_state.user.id)\
+            .eq('user_id', user_id)\
             .execute()
             
         # Process the response to include image URLs
