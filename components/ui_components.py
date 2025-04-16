@@ -395,6 +395,106 @@ def apply_custom_css():
                 gap: 8px;
                 margin: 8px 0;
             }
+
+            /* Mobile responsive adjustments */
+            @media (max-width: 768px) {
+                /* Increase button size for touch targets */
+                [data-testid="baseButton-secondary"] {
+                    min-height: 44px !important;
+                    min-width: 44px !important;
+                    padding: 10px !important;
+                }
+                
+                /* Ensure inputs are large enough to tap */
+                .stTextInput input, .stNumberInput input, .stSelectbox > div {
+                    min-height: 44px !important;
+                    font-size: 16px !important; /* Prevents iOS zoom on focus */
+                }
+                
+                /* Improve sidebar toggle button on mobile */
+                [data-testid="collapsedControl"] {
+                    height: 50px !important;
+                    width: 50px !important;
+                    border-radius: 25px !important;
+                    background-color: rgba(0, 0, 0, 0.1) !important;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
+                    z-index: 999 !important;
+                    animation: pulse 2s ease-in-out infinite, glow 4s ease-in-out 1;
+                }
+                
+                /* Subtle animation to draw attention to the button */
+                @keyframes pulse {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                    100% { transform: scale(1); }
+                }
+                
+                /* Initial glow animation for first-time users */
+                @keyframes glow {
+                    0% { box-shadow: 0 0 5px rgba(0, 0, 0, 0.2); }
+                    50% { box-shadow: 0 0 10px rgba(0, 133, 255, 0.4); }
+                    100% { box-shadow: 0 0 5px rgba(0, 0, 0, 0.2); }
+                }
+                
+                /* Make the icon inside more visible */
+                [data-testid="collapsedControl"] svg {
+                    fill: #333 !important;
+                    width: 25px !important;
+                    height: 25px !important;
+                }
+                
+                /* Make sure filter buttons are easily tappable */
+                button[data-testid="baseButton-secondary"]:has(div:contains("🏷️")),
+                button[data-testid="baseButton-secondary"]:has(div:contains("💰")),
+                button[data-testid="baseButton-secondary"]:has(div:contains("⏳")),
+                button[data-testid="baseButton-secondary"]:has(div:contains("✅")),
+                button[data-testid="baseButton-secondary"]:has(div:contains("👤")) {
+                    width: 50px !important;
+                    height: 50px !important;
+                }
+                
+                /* Adjust spacing for mobile */
+                .compact-form {
+                    padding: 1rem 0.5rem !important;
+                }
+                
+                /* Ensure form rows stack on mobile */
+                .compact-form .row {
+                    flex-direction: column !important;
+                    gap: 0.5rem !important;
+                }
+                
+                /* Make tables and dataframes horizontally scrollable on mobile */
+                [data-testid="stTable"], .dataframe-container {
+                    overflow-x: auto !important;
+                    -webkit-overflow-scrolling: touch !important;
+                    max-width: 100% !important;
+                    display: block !important;
+                }
+                
+                /* Adjust font sizes for readability on mobile */
+                [data-testid="stMarkdown"] {
+                    font-size: 14px !important;
+                }
+                
+                /* Ensure inputs don't get cut off */
+                input, select, textarea {
+                    max-width: 100% !important;
+                    box-sizing: border-box !important;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .login-container {
+                    max-width: 100%;
+                    margin: 1rem auto;
+                    padding: 1rem;
+                }
+                
+                .login-tagline {
+                    font-size: 1.8rem;
+                }
+            }
         </style>
         """, unsafe_allow_html=True)
 
@@ -413,31 +513,31 @@ def render_sidebar_nav(current_page, first_name, on_logout):
     
     # Available icon button - Yellow
     with cols[0]:
-        if st.button("🏷️", key="nav_available", help=t('available')):
+        if st.button("🏷️", key="nav_available", help=t('available'), use_container_width=True):
             st.session_state.current_page = "available"
             st.rerun()
     
     # Paid Pending icon button - Blue 
     with cols[1]:
-        if st.button("💰", key="nav_paid_ready", help=t('paid_ready')):
+        if st.button("💰", key="nav_paid_ready", help=t('paid_ready'), use_container_width=True):
             st.session_state.current_page = "paid_ready"
             st.rerun()
     
     # Claimed icon button - Purple
     with cols[2]:
-        if st.button("⏳", key="nav_claimed", help=t('claimed')):
+        if st.button("⏳", key="nav_claimed", help=t('claimed'), use_container_width=True):
             st.session_state.current_page = "claimed"
             st.rerun()
     
     # Complete icon button - Green
     with cols[3]:
-        if st.button("✅", key="nav_complete", help=t('complete')):
+        if st.button("✅", key="nav_complete", help=t('complete'), use_container_width=True):
             st.session_state.current_page = "complete"
             st.rerun()
     
     # Sold To icon button - Gray
     with cols[4]:
-        if st.button("👤", key="nav_sold_to", help=t('sold_to')):
+        if st.button("👤", key="nav_sold_to", help=t('sold_to'), use_container_width=True):
             st.session_state.current_page = "sold_to"
             st.rerun()
     

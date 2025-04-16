@@ -100,7 +100,7 @@ st.set_page_config(
     page_title="Declutter",
     page_icon="🧹",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"
 )
 
 # Apply custom CSS
@@ -188,6 +188,43 @@ else:
             first_name=first_name,
             on_logout=logout
         )
+
+        # Show mobile navigation hint for first-time users
+        # Initialize session state for showing hint
+        if 'mobile_nav_hint_shown' not in st.session_state:
+            st.session_state.mobile_nav_hint_shown = False
+            
+        # Add a hint for mobile users about the sidebar
+        st.markdown("""
+            <style>
+                @media (max-width: 768px) {
+                    .mobile-nav-hint {
+                        position: relative;
+                        padding: 10px 15px;
+                        margin-bottom: 15px;
+                        background-color: #f0f7ff;
+                        border-left: 5px solid #0085ff;
+                        border-radius: 5px;
+                        animation: fadeOut 8s forwards;
+                        font-size: 14px;
+                    }
+                    @keyframes fadeOut {
+                        0% { opacity: 1; }
+                        80% { opacity: 1; }
+                        100% { opacity: 0; visibility: hidden; }
+                    }
+                }
+                @media (min-width: 769px) {
+                    .mobile-nav-hint {
+                        display: none;
+                    }
+                }
+            </style>
+            <div class="mobile-nav-hint">
+                <b>Tip:</b> Tap the menu icon <span style="background-color:rgba(0,0,0,0.1);border-radius:50%;padding:4px 8px;margin:0 3px;">☰</span> in the top-left corner for navigation options.
+            </div>
+        """, unsafe_allow_html=True)
+        st.session_state.mobile_nav_hint_shown = True
 
         # Load items (used by multiple pages)
         try:
