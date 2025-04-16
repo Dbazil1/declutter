@@ -348,6 +348,22 @@ def apply_custom_css():
             }
             [data-testid="stSelectbox"] > div {
                 min-width: 150px !important;
+                max-width: 170px !important;
+                height: auto !important;
+                min-height: 38px !important;
+            }
+            /* Make dropdown options taller to fit emoji and text */
+            [data-testid="stSelectbox"] ul li {
+                height: auto !important;
+                min-height: 38px !important;
+                padding: 8px 12px !important;
+                display: flex !important;
+                align-items: center !important;
+            }
+            /* Center the login language selector */
+            [data-testid="stSelectbox"][aria-label=""] {
+                width: auto !important;
+                margin: 0 auto !important;
             }
             /* For sidebar language selector */
             .sidebar .stSelectbox > div {
@@ -593,23 +609,20 @@ def render_login_ui():
             else:
                 st.error("Supabase client not properly initialized.")
 
-    # Add language selector at the bottom right
-    # Create a container with right alignment
-    st.markdown('<div style="display: flex; justify-content: flex-end; margin-top: 20px;">', unsafe_allow_html=True)
+    # Add language selector at the bottom, centered
+    st.markdown('<div style="display: flex; justify-content: center; margin-top: 20px;">', unsafe_allow_html=True)
     
-    # Create two columns for the language buttons
-    col1, col2 = st.columns([1, 1])
+    # Create a compact dropdown with just enough width
+    selected_lang = st.selectbox(
+        "",  # Empty label
+        options=[('🇺🇸 English', 'en'), ('🇲🇽 Español', 'es')],
+        format_func=lambda x: x[0],
+        key='login_language_selector',
+        index=0 if st.session_state.language == 'en' else 1,
+        label_visibility="collapsed"
+    )
     
-    with col1:
-        if st.button("🇺🇸 English", key="lang_en", use_container_width=True, 
-                    disabled=st.session_state.language == 'en'):
-            st.session_state.language = 'en'
-            st.rerun()
-            
-    with col2:
-        if st.button("🇲🇽 Español", key="lang_es", use_container_width=True,
-                    disabled=st.session_state.language == 'es'):
-            st.session_state.language = 'es'
-            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    st.markdown('</div>', unsafe_allow_html=True) 
+    if selected_lang[1] != st.session_state.language:
+        st.session_state.language = selected_lang[1] 
