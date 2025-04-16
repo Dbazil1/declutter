@@ -340,6 +340,19 @@ def apply_custom_css():
             [data-testid="stSelectbox"] > div > div:hover {
                 border-color: #333;
             }
+            /* Fix for language dropdown width */
+            .language-selector [data-testid="stSelectbox"],
+            [key="login_language_selector"],
+            [key="language_selector"] {
+                min-width: 150px !important;
+            }
+            [data-testid="stSelectbox"] > div {
+                min-width: 150px !important;
+            }
+            /* For sidebar language selector */
+            .sidebar .stSelectbox > div {
+                width: 100% !important;
+            }
             /* Icon button styles */
             .icon-button {
                 padding: 0.5rem !important;
@@ -588,7 +601,7 @@ def render_login_ui():
     
     # Create a container for the language dropdown in the top right
     with st.container():
-        st.markdown('<div style="position: absolute; top: 10px; right: 20px; z-index: 1000;">', unsafe_allow_html=True)
+        st.markdown('<div style="position: absolute; top: 10px; right: 20px; z-index: 1000; min-width: 150px;">', unsafe_allow_html=True)
         selected_lang = st.selectbox(
             "",  # Empty label for cleaner look
             options=[('🇺🇸 English', 'en'), ('🇲🇽 Español', 'es')],
