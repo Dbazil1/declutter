@@ -593,24 +593,23 @@ def render_login_ui():
             else:
                 st.error("Supabase client not properly initialized.")
 
-    # Add language selector in the top right corner
-    st.markdown("""
-        <div class="language-selector">
-        </div>
-    """, unsafe_allow_html=True)
+    # Add language selector at the bottom right
+    # Create a container with right alignment
+    st.markdown('<div style="display: flex; justify-content: flex-end; margin-top: 20px;">', unsafe_allow_html=True)
     
-    # Create a container for the language dropdown in the top right
-    with st.container():
-        st.markdown('<div style="position: absolute; top: 10px; right: 20px; z-index: 1000; min-width: 150px;">', unsafe_allow_html=True)
-        selected_lang = st.selectbox(
-            "",  # Empty label for cleaner look
-            options=[('🇺🇸 English', 'en'), ('🇲🇽 Español', 'es')],
-            format_func=lambda x: x[0],
-            key='login_language_selector',
-            index=0 if st.session_state.language == 'en' else 1,
-            label_visibility="collapsed"
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        if selected_lang[1] != st.session_state.language:
-            st.session_state.language = selected_lang[1] 
+    # Create two columns for the language buttons
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        if st.button("🇺🇸 English", key="lang_en", use_container_width=True, 
+                    disabled=st.session_state.language == 'en'):
+            st.session_state.language = 'en'
+            st.rerun()
+            
+    with col2:
+        if st.button("🇲🇽 Español", key="lang_es", use_container_width=True,
+                    disabled=st.session_state.language == 'es'):
+            st.session_state.language = 'es'
+            st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True) 
