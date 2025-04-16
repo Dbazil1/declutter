@@ -221,7 +221,7 @@ else:
                 }
             </style>
             <div class="mobile-nav-hint">
-                <b>Tip:</b> Tap the menu icon <span style="background-color:rgba(0,0,0,0.1);border-radius:50%;padding:4px 8px;margin:0 3px;">&#9776;</span> in the top-left corner for navigation options.
+                <b>Tip:</b> Tap the menu icon <span style="background-color:rgba(0,0,0,0.1);border-radius:50%;padding:4px 8px;margin:0 3px;">&gt;</span> in the top-left corner for navigation options.
             </div>
         """, unsafe_allow_html=True)
         st.session_state.mobile_nav_hint_shown = True
