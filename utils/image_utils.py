@@ -35,21 +35,36 @@ def generate_sales_photo(image_url, price_usd, price_local, item_name, style="ov
         # Create a drawing context
         draw = ImageDraw.Draw(img)
         
-        # Calculate font sizes with minimum sizes
-        title_size_percent = 0.06   # Increased from 0.045 to 0.06 (6% of image width)
-        price_size_percent = 0.075  # Increased from 0.06 to 0.075 (7.5% of image width)
-        min_title_size = 36        # Increased from 24 to 36
-        min_price_size = 42        # Increased from 32 to 42
+        # Calculate font sizes with larger minimum sizes and adjusted proportions
+        title_size_percent = 0.08   # 8% of image width
+        price_size_percent = 0.09   # 9% of image width
+        min_title_size = 48        # Significantly larger minimum size
+        min_price_size = 54        # Significantly larger minimum size
         
-        title_font_size = max(int(img.width * title_size_percent), min_title_size)
-        price_font_size = max(int(img.width * price_size_percent), min_price_size)
+        # Calculate sizes and explicitly ensure we use the larger of the two values
+        proportional_title_size = int(img.width * title_size_percent)
+        proportional_price_size = int(img.width * price_size_percent)
+        
+        # Use max() to ensure we never go below minimum sizes
+        title_font_size = max(proportional_title_size, min_title_size)
+        price_font_size = max(proportional_price_size, min_price_size)
+        
+        # Debug logging in development mode
+        if is_development:
+            st.write(f"Image width: {img.width}")
+            st.write(f"Proportional title size: {proportional_title_size}")
+            st.write(f"Proportional price size: {proportional_price_size}")
+            st.write(f"Final title font size: {title_font_size}")
+            st.write(f"Final price font size: {price_font_size}")
         
         # Try to load a font
         try:
             # Try different font paths
             font_paths = [
+                "/System/Library/Fonts/Arial Bold.ttf",  # Try bold version first
                 "/System/Library/Fonts/Arial.ttf",  # macOS
                 "/usr/share/fonts/truetype/arial.ttf",  # Linux
+                "C:\\Windows\\Fonts\\arialbd.ttf",  # Windows Bold
                 "C:\\Windows\\Fonts\\arial.ttf"  # Windows
             ]
             title_font = None
@@ -118,22 +133,23 @@ def generate_sales_photo(image_url, price_usd, price_local, item_name, style="ov
             title_x = (img.width - (title_bbox[2] - title_bbox[0])) // 2
             price_x = (img.width - (price_bbox[2] - price_bbox[0])) // 2
             
-            # Position text with padding from bottom
-            title_y = int(img.height * 0.82) - (title_bbox[3] - title_bbox[1])  # Moved up from 0.85
-            price_y = int(img.height * 0.92) - (price_bbox[3] - price_bbox[1])  # Moved up from 0.95
+            # Position text with more padding from bottom
+            title_y = int(img.height * 0.80) - (title_bbox[3] - title_bbox[1])  # Moved up further
+            price_y = int(img.height * 0.90) - (price_bbox[3] - price_bbox[1])  # Moved up further
             
             # Add semi-transparent background for text with better contrast
-            background_height = int(img.height * 0.3)  # Increased from 0.25 to 0.3 (30% of image height)
-            background = Image.new('RGBA', (img.width, background_height), (0, 0, 0, 200))  # Increased opacity from 180 to 200
+            background_height = int(img.height * 0.35)  # Increased to 35% of image height
+            background = Image.new('RGBA', (img.width, background_height), (0, 0, 0, 220))  # Even darker background
             img.paste(background, (0, img.height - background_height), background)
             
             # Create a new drawing context after pasting the background
             draw = ImageDraw.Draw(img)
             
             # Add text shadow for better readability
-            shadow_offset = 3  # Increased from 2 to 3
-            draw.text((title_x + shadow_offset, title_y + shadow_offset), item_name, fill=(0, 0, 0, 160), font=title_font)  # Increased shadow opacity
-            draw.text((price_x + shadow_offset, price_y + shadow_offset), price_text, fill=(0, 0, 0, 160), font=price_font)  # Increased shadow opacity
+            shadow_offset = 4  # Increased shadow offset
+            for offset in range(1, shadow_offset + 1):  # Multiple shadow layers for better effect
+                draw.text((title_x + offset, title_y + offset), item_name, fill=(0, 0, 0, 160 - offset * 20), font=title_font)
+                draw.text((price_x + offset, price_y + offset), price_text, fill=(0, 0, 0, 160 - offset * 20), font=price_font)
             
             # Add the main text
             draw.text((title_x, title_y), item_name, fill=(255, 255, 255), font=title_font)
