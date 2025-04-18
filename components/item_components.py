@@ -111,22 +111,12 @@ def render_item_grid(items, enable_edit=True, rerun_callback=None):
     cols = st.columns(3)
     for i, item in enumerate(items):
         with cols[i % 3]:
+            # Display item number (first 8 chars of UUID)
+            item_number = item['id'][:8]
+            st.markdown(f'<div style="font-size: 0.8em; color: #666; margin-bottom: 0.5em;">#{item_number}</div>', unsafe_allow_html=True)
+            
             if item.get('image_url'):
-                # Try to use pre-generated sales photo URL
-                if item.get('sales_overlay_url'):
-                    st.image(item['sales_overlay_url'], caption=item['name'])
-                else:
-                    # Generate and cache if needed
-                    sales_photo = generate_sales_photo(
-                        item['image_url'],
-                        item.get('price_usd'),
-                        item.get('price_local'),
-                        item['name'],
-                        "overlay",
-                        item['id']
-                    )
-                    if sales_photo:
-                        st.image(io.BytesIO(sales_photo), caption=item['name'])
+                st.image(item['image_url'], caption=item['name'])
             else:
                 st.image("https://via.placeholder.com/200x200?text=No+Image", caption=item['name'])
             
@@ -158,7 +148,7 @@ def render_item_grid(items, enable_edit=True, rerun_callback=None):
             with col2:
                 # Show sold to name if status is not available
                 if item.get('sale_status') != 'available' and item.get('sold_to'):
-                    st.markdown(f'<div class="status-tag status-sold-to">👤 {item["sold_to"]}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="sold-to">👤 {item["sold_to"]}</div>', unsafe_allow_html=True)
             
             with col3:
                 if enable_edit and st.button(t('edit'), key=f"edit_{item['id']}", type="secondary", use_container_width=True):
