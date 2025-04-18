@@ -4,8 +4,11 @@ def generate_whatsapp_message_template(item_name, item_id, price_usd=None, price
     """
     Generate a bilingual template message for WhatsApp contact based on item details
     """
+    # Get the item number (first 8 chars of UUID)
+    item_number = item_id[:8]
+    
     # Spanish message first
-    message = f"¡Hola! Me interesa tu artículo: {item_name}"
+    message = f"¡Hola! Me interesa tu artículo #{item_number}: {item_name}"
     
     # Add price information if available - Spanish
     if price_usd and price_local:
@@ -22,7 +25,7 @@ def generate_whatsapp_message_template(item_name, item_id, price_usd=None, price
     message += "\n\n------------------\n\n"
     
     # English message second
-    message += f"Hello! I'm interested in your item: {item_name}"
+    message += f"Hello! I'm interested in your item #{item_number}: {item_name}"
     
     # Add price information if available - English
     if price_usd and price_local:
@@ -82,30 +85,4 @@ def create_whatsapp_link(phone_number, message):
     # Create the WhatsApp link
     whatsapp_link = f"https://wa.me/{formatted_phone}?text={encoded_message}"
     
-    return whatsapp_link
-
-def generate_whatsapp_message(item, user):
-    """Generate a WhatsApp message for an item"""
-    # Get the item number (first 8 chars of UUID)
-    item_number = item['id'][:8]
-    
-    # Base message with item number
-    message = f"Item #{item_number}: {item['name']}\n\n"
-    
-    # Add prices if available
-    if item.get('price_usd') and item.get('price_local'):
-        message += f"${item['price_usd']} USD / {item['price_local']} Moneda Local\n\n"
-    elif item.get('price_usd'):
-        message += f"${item['price_usd']} USD\n\n"
-    elif item.get('price_local'):
-        message += f"{item['price_local']} Moneda Local\n\n"
-    
-    # Add image URL if available
-    if item.get('image_url'):
-        message += f"Image: {item['image_url']}\n\n"
-    
-    # Add seller's WhatsApp if they want to share it
-    if user.get('share_whatsapp_for_items') and user.get('whatsapp_phone'):
-        message += f"Contact seller: {user['whatsapp_phone']}"
-    
-    return message 
+    return whatsapp_link 
