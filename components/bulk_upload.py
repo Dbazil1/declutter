@@ -26,7 +26,7 @@ def render_bulk_upload_form(rerun_callback=None):
         # Create a container for the table
         with st.container():
             # Create columns for the table headers
-            col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+            col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 0.5])
             
             with col1:
                 st.markdown("**Photo**")
@@ -36,6 +36,8 @@ def render_bulk_upload_form(rerun_callback=None):
                 st.markdown("**USD Price**")
             with col4:
                 st.markdown("**Local Price**")
+            with col5:
+                st.markdown("**Delete**")
             
             # Create a row for each uploaded file
             for i, uploaded_file in enumerate(uploaded_files):
@@ -46,7 +48,7 @@ def render_bulk_upload_form(rerun_callback=None):
                 image.thumbnail((100, 100))
                 
                 # Create columns for this row
-                col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 0.5])
                 
                 with col1:
                     # Display the thumbnail
@@ -81,13 +83,22 @@ def render_bulk_upload_form(rerun_callback=None):
                         label_visibility="collapsed"
                     )
                 
-                # Add the data to our list
-                items_data.append({
-                    'image': uploaded_file,
-                    'name': name,
-                    'price_usd': price_usd,
-                    'price_local': price_local
-                })
+                with col5:
+                    # Delete checkbox
+                    delete = st.checkbox(
+                        "Delete",
+                        key=f"delete_{i}",
+                        label_visibility="collapsed"
+                    )
+                
+                # Add the data to our list only if not marked for deletion
+                if not delete:
+                    items_data.append({
+                        'image': uploaded_file,
+                        'name': name,
+                        'price_usd': price_usd,
+                        'price_local': price_local
+                    })
         
         # Submit button
         if st.button("Submit All Items"):

@@ -38,7 +38,7 @@ def generate_whatsapp_message_template(item_name, item_id, price_usd=None, price
     # Add app promotion footer
     message += "\n\n------------------"
     message += "\nEnviado por Declutter | Sent via Declutter"
-    message += "\nhttps://declutter.app"
+    message += "\nhttps://declutter.streamlit.app"
     
     return message
 
