@@ -149,7 +149,8 @@ def render_public_page(link_code):
                         item['name'],
                         item['id'],
                         item.get('price_usd'),
-                        item.get('price_local')
+                        item.get('price_local'),
+                        public_link['link_code']
                     )
                     
                     # Create WhatsApp link
