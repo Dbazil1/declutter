@@ -489,6 +489,7 @@ def load_public_items(user_id):
             .select('*, item_images(image_url)')\
             .eq('user_id', user_id)\
             .eq('is_sold', False)\
+            .order('created_at', desc=True)\
             .execute()
             
         # Process the response to include image URLs
