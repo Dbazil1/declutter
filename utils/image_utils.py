@@ -49,14 +49,6 @@ def generate_sales_photo(image_url, price_usd, price_local, item_name, style="ov
         title_font_size = max(proportional_title_size, min_title_size)
         price_font_size = max(proportional_price_size, min_price_size)
         
-        # Debug logging in development mode
-        if is_development:
-            st.write(f"Image width: {img.width}")
-            st.write(f"Proportional title size: {proportional_title_size}")
-            st.write(f"Proportional price size: {proportional_price_size}")
-            st.write(f"Final title font size: {title_font_size}")
-            st.write(f"Final price font size: {price_font_size}")
-        
         # Try to load a font
         try:
             # Try different font paths
