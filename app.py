@@ -39,6 +39,7 @@ try:
     # UI components
     from components.ui_components import apply_custom_css, render_sidebar_nav, render_login_ui
     from components.item_components import render_add_item_form
+    from components.bulk_upload import render_bulk_upload_form
     
     # Utils
     from utils.translation_utils import t
@@ -243,6 +244,8 @@ else:
                 render_items_page(st.session_state.current_page, items, first_name)
             elif st.session_state.current_page == 'add':
                 render_add_item_form(rerun_callback=st.rerun)
+            elif st.session_state.current_page == 'bulk_upload':
+                render_bulk_upload_form(rerun_callback=st.rerun)
             elif st.session_state.current_page == 'photos':
                 render_photos_page(items)
             elif st.session_state.current_page == 'public_links':

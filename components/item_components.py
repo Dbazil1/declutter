@@ -174,6 +174,13 @@ def render_add_item_form(rerun_callback=None):
     
     st.title(t('add_item'))
     
+    # Add bulk upload button
+    if st.button("📦 Bulk Upload Items", use_container_width=True):
+        st.session_state.current_page = "bulk_upload"
+        st.rerun()
+    
+    st.markdown("---")
+    
     with st.form("add_item_form"):
         # Wrap the entire form in the compact-form class
         st.markdown('<div class="compact-form">', unsafe_allow_html=True)
