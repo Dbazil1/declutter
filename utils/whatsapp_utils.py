@@ -7,36 +7,28 @@ def generate_whatsapp_message_template(item_name, item_id, price_usd=None, price
     # Get the item number (first 8 chars of UUID)
     item_number = item_id[:8]
     
-    # Combined bilingual greeting and interest statement
-    message = f"Hola/Hi! "
+    # Start with the interest statement
+    message = "I'm interested in / Me interesa:\n\n"
     
-    if offer_amount:
-        # If there's an offer amount, include it in the message
-        message += f"Me gustaría ofrecerte/I'd like to offer you {offer_amount} por/for:\n"
-    else:
-        # If no offer, just express interest in buying
-        message += f"Me gustaría comprar/I'd like to buy:\n"
+    # Item details
+    message += f"{item_name} (#{item_number})\n\n"
     
-    # Item details with indentation
-    message += f"    {item_name} (#{item_number})\n"
-    
-    # Add price information if available
+    # Add original price information if available
     if price_usd and price_local:
-        message += f"    ${price_usd} USD / {price_local} moneda local\n\n"
+        message += f"Original Price / Precio Original: ${price_usd} USD / {price_local} moneda local\n\n"
     elif price_usd:
-        message += f"    ${price_usd} USD\n\n"
+        message += f"Original Price / Precio Original: ${price_usd} USD\n\n"
     elif price_local:
-        message += f"    {price_local} moneda local\n\n"
+        message += f"Original Price / Precio Original: {price_local} moneda local\n\n"
     
-    # Simple closing question
-    message += "Todavía está disponible? Is it available?\n\n"
+    # Add offer section
+    message += "My Offer / Mi Oferta: \n\n"
     
-    # Add app promotion footer with public link
-    message += "Sent from Declutter\n"
+    # Add separator and footer
+    message += "___\n"
+    message += "sent from declutter.streamlit.app"
     if link_code:
-        message += f"https://declutter.streamlit.app?code={link_code}"
-    else:
-        message += "https://declutter.streamlit.app"
+        message += f"/?code={link_code}"
     
     return message
 

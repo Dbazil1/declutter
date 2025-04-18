@@ -124,9 +124,6 @@ def render_public_page(link_code):
                 if item.get('category'):
                     st.markdown(f"**{bilingual('category')}:** {item['category']}")
                 
-                # Add offer input field
-                offer_amount = st.text_input(bilingual('make_an_offer'), key=f"offer_{item['id']}")
-                
                 # Add WhatsApp CSS first (always add this CSS)
                 st.markdown("""
                 <style>
@@ -153,8 +150,7 @@ def render_public_page(link_code):
                         item['id'],
                         item.get('price_usd'),
                         item.get('price_local'),
-                        public_link['link_code'],
-                        offer_amount if offer_amount else None
+                        public_link['link_code']
                     )
                     
                     # Create WhatsApp link
@@ -165,4 +161,4 @@ def render_public_page(link_code):
                     
                     if whatsapp_link:
                         # Display WhatsApp button
-                        st.markdown(f'<a href="{whatsapp_link}" target="_blank" class="whatsapp-button">{bilingual("contact_via_whatsapp")}</a>', unsafe_allow_html=True) 
+                        st.markdown(f'<a href="{whatsapp_link}" target="_blank" class="whatsapp-button">Make me an offer via WhatsApp!</a>', unsafe_allow_html=True) 
