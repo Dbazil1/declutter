@@ -36,10 +36,10 @@ def generate_sales_photo(image_url, price_usd, price_local, item_name, style="ov
         draw = ImageDraw.Draw(img)
         
         # Calculate font sizes with minimum sizes
-        title_size_percent = 0.045  # 4.5% of image width
-        price_size_percent = 0.06   # 6% of image width
-        min_title_size = 24
-        min_price_size = 32
+        title_size_percent = 0.06   # Increased from 0.045 to 0.06 (6% of image width)
+        price_size_percent = 0.075  # Increased from 0.06 to 0.075 (7.5% of image width)
+        min_title_size = 36        # Increased from 24 to 36
+        min_price_size = 42        # Increased from 32 to 42
         
         title_font_size = max(int(img.width * title_size_percent), min_title_size)
         price_font_size = max(int(img.width * price_size_percent), min_price_size)
@@ -119,21 +119,21 @@ def generate_sales_photo(image_url, price_usd, price_local, item_name, style="ov
             price_x = (img.width - (price_bbox[2] - price_bbox[0])) // 2
             
             # Position text with padding from bottom
-            title_y = int(img.height * 0.85) - (title_bbox[3] - title_bbox[1])
-            price_y = int(img.height * 0.95) - (price_bbox[3] - price_bbox[1])
+            title_y = int(img.height * 0.82) - (title_bbox[3] - title_bbox[1])  # Moved up from 0.85
+            price_y = int(img.height * 0.92) - (price_bbox[3] - price_bbox[1])  # Moved up from 0.95
             
             # Add semi-transparent background for text with better contrast
-            background_height = int(img.height * 0.25)  # 25% of image height
-            background = Image.new('RGBA', (img.width, background_height), (0, 0, 0, 180))  # Darker background
+            background_height = int(img.height * 0.3)  # Increased from 0.25 to 0.3 (30% of image height)
+            background = Image.new('RGBA', (img.width, background_height), (0, 0, 0, 200))  # Increased opacity from 180 to 200
             img.paste(background, (0, img.height - background_height), background)
             
             # Create a new drawing context after pasting the background
             draw = ImageDraw.Draw(img)
             
             # Add text shadow for better readability
-            shadow_offset = 2
-            draw.text((title_x + shadow_offset, title_y + shadow_offset), item_name, fill=(0, 0, 0, 128), font=title_font)
-            draw.text((price_x + shadow_offset, price_y + shadow_offset), price_text, fill=(0, 0, 0, 128), font=price_font)
+            shadow_offset = 3  # Increased from 2 to 3
+            draw.text((title_x + shadow_offset, title_y + shadow_offset), item_name, fill=(0, 0, 0, 160), font=title_font)  # Increased shadow opacity
+            draw.text((price_x + shadow_offset, price_y + shadow_offset), price_text, fill=(0, 0, 0, 160), font=price_font)  # Increased shadow opacity
             
             # Add the main text
             draw.text((title_x, title_y), item_name, fill=(255, 255, 255), font=title_font)
