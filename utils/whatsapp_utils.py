@@ -1,6 +1,6 @@
 import urllib.parse
 
-def generate_whatsapp_message_template(item_name, item_id, price_usd=None, price_local=None, link_code=None):
+def generate_whatsapp_message_template(item_name, item_id, price_usd=None, price_local=None, link_code=None, offer_amount=None):
     """
     Generate a bilingual template message for WhatsApp contact based on item details
     """
@@ -8,7 +8,14 @@ def generate_whatsapp_message_template(item_name, item_id, price_usd=None, price
     item_number = item_id[:8]
     
     # Combined bilingual greeting and interest statement
-    message = f"Hola/Hi! Me interesa/I'm interested in:\n"
+    message = f"Hola/Hi! "
+    
+    if offer_amount:
+        # If there's an offer amount, include it in the message
+        message += f"Me gustaría ofrecerte/I'd like to offer you {offer_amount} por/for:\n"
+    else:
+        # If no offer, just express interest in buying
+        message += f"Me gustaría comprar/I'd like to buy:\n"
     
     # Item details with indentation
     message += f"    {item_name} (#{item_number})\n"

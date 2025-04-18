@@ -107,6 +107,7 @@ translations = {
         'save_settings': "Save Settings",
         'contact_via_whatsapp': "Contact via WhatsApp",
         'full_phone_number': "Phone Number (with country code)",
+        'make_an_offer': "Make an offer / Haz una oferta",
         
         # Settings
         'settings': "Settings",
@@ -205,6 +206,7 @@ translations = {
         'save_settings': "Guardar Configuración",
         'contact_via_whatsapp': "Contactar por WhatsApp",
         'full_phone_number': "Número de Teléfono (con código de país)",
+        'make_an_offer': "Haz una oferta / Make an offer",
         
         # Settings
         'settings': "Configuración",
