@@ -161,4 +161,4 @@ def render_public_page(link_code):
                     
                     if whatsapp_link:
                         # Display WhatsApp button
-                        st.markdown(f'<a href="{whatsapp_link}" target="_blank" class="whatsapp-button">Make me an offer via WhatsApp!</a>', unsafe_allow_html=True) 
+                        st.markdown(f'<a href="{whatsapp_link}" target="_blank" class="whatsapp-button">WhatsApp: Hazme oferta / Make an offer</a>', unsafe_allow_html=True) 
