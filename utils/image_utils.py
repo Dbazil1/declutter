@@ -24,21 +24,25 @@ def generate_sales_photo(image_url, price_usd, price_local, item_name, style="ov
         if img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # Resize large images for better performance
-        max_size = 1200
-        if img.width > max_size or img.height > max_size:
-            ratio = min(max_size/img.width, max_size/img.height)
+        # Resize large images to max 1920x1080 while maintaining aspect ratio
+        max_width = 1920
+        max_height = 1080
+        if img.width > max_width or img.height > max_height:
+            ratio = min(max_width/img.width, max_height/img.height)
             new_size = (int(img.width * ratio), int(img.height * ratio))
             img = img.resize(new_size, Image.Resampling.LANCZOS)
         
         # Create a drawing context
         draw = ImageDraw.Draw(img)
         
-        # Calculate font sizes based on image width
+        # Calculate font sizes with minimum sizes
         title_size_percent = 0.045  # 4.5% of image width
         price_size_percent = 0.06   # 6% of image width
-        title_font_size = int(img.width * title_size_percent)
-        price_font_size = int(img.width * price_size_percent)
+        min_title_size = 24
+        min_price_size = 32
+        
+        title_font_size = max(int(img.width * title_size_percent), min_title_size)
+        price_font_size = max(int(img.width * price_size_percent), min_price_size)
         
         # Try to load a font
         try:
@@ -118,15 +122,20 @@ def generate_sales_photo(image_url, price_usd, price_local, item_name, style="ov
             title_y = int(img.height * 0.85) - (title_bbox[3] - title_bbox[1])
             price_y = int(img.height * 0.95) - (price_bbox[3] - price_bbox[1])
             
-            # Add semi-transparent background for text
-            background_height = int(img.height * 0.2)  # 20% of image height
-            background = Image.new('RGBA', (img.width, background_height), (0, 0, 0, 128))
+            # Add semi-transparent background for text with better contrast
+            background_height = int(img.height * 0.25)  # 25% of image height
+            background = Image.new('RGBA', (img.width, background_height), (0, 0, 0, 180))  # Darker background
             img.paste(background, (0, img.height - background_height), background)
             
             # Create a new drawing context after pasting the background
             draw = ImageDraw.Draw(img)
             
-            # Add the text
+            # Add text shadow for better readability
+            shadow_offset = 2
+            draw.text((title_x + shadow_offset, title_y + shadow_offset), item_name, fill=(0, 0, 0, 128), font=title_font)
+            draw.text((price_x + shadow_offset, price_y + shadow_offset), price_text, fill=(0, 0, 0, 128), font=price_font)
+            
+            # Add the main text
             draw.text((title_x, title_y), item_name, fill=(255, 255, 255), font=title_font)
             draw.text((price_x, price_y), price_text, fill=(255, 255, 255), font=price_font)
         
